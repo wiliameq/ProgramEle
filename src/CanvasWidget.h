@@ -130,6 +130,7 @@ class FinalBufferDialog;
 class CanvasWidget : public QWidget {
     Q_OBJECT
 public:
+    enum class ResizeHandle { None, TopLeft, TopRight, BottomLeft, BottomRight };
     explicit CanvasWidget(QWidget* parent, ProjectSettings* settings);
 
     // Background
@@ -290,7 +291,6 @@ private:
     // bezpośrednio na płótnie, gdy użytkownik wstawia lub edytuje tekst.
     // Po zatwierdzeniu lub anulowaniu edycji pole jest usuwane.
     QTextEdit* m_textEdit = nullptr;
-    enum class ResizeHandle { None, TopLeft, TopRight, BottomLeft, BottomRight };
     ResizeHandle m_resizeHandle = ResizeHandle::None;
     bool m_isResizingTempBubble = false;
     bool m_isResizingSelectedBubble = false;

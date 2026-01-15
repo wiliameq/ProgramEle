@@ -16,6 +16,7 @@
 // std::max, std::min, std::sqrt
 #include <cmath>
 #include <algorithm>
+#include <array>
 
 #include <QtPdf/QPdfDocument>
 #include <QSize>
@@ -27,12 +28,12 @@
 namespace {
 CanvasWidget::ResizeHandle hitResizeHandle(const QRectF &rect, const QPointF &pos, double threshold) {
     struct HandlePoint { CanvasWidget::ResizeHandle handle; QPointF point; };
-    const HandlePoint points[] = {
+    const std::array<HandlePoint, 4> points{{
         {CanvasWidget::ResizeHandle::TopLeft, rect.topLeft()},
         {CanvasWidget::ResizeHandle::TopRight, rect.topRight()},
         {CanvasWidget::ResizeHandle::BottomLeft, rect.bottomLeft()},
         {CanvasWidget::ResizeHandle::BottomRight, rect.bottomRight()},
-    };
+    }};
     for (const auto &hp : points) {
         const double dx = pos.x() - hp.point.x();
         const double dy = pos.y() - hp.point.y();
