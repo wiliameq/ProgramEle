@@ -38,3 +38,13 @@ compile_commands.json
 Thumbs.db
 .DS_Store
 *.log
+
+# ---- Qt/CMake AUTOGEN (moc/uic/rcc) ----
+*_autogen/
+**/*_autogen/
+moc_*.cpp
+moc_*.cpp.d
+mocs_compilation.cpp
+ui_*.h
+qrc_*.cpp
+
