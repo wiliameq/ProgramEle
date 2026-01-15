@@ -1,0 +1,586 @@
+
+#include "Dialogs.h"
+#include "Settings.h"
+#include "CanvasWidget.h"
+
+#include <QVBoxLayout>
+#include <QHBoxLayout>
+#include <QFormLayout>
+#include <QDialogButtonBox>
+#include <QComboBox>
+#include <QSpinBox>
+#include <QDoubleSpinBox>
+#include <QLineEdit>
+#include <QPushButton>
+#include <QColorDialog>
+#include <QLabel>
+#include <QFileDialog>
+#include <QPageSize>
+#include <QTextCursor>
+#include <QTextTable>
+#include <QTextTableFormat>
+#include <QTextTableCell>
+#include <QTextTableCellFormat>
+#include <QTextCharFormat>
+#include <QTextBlockFormat>
+#include <QAbstractTextDocumentLayout>
+#include <QPrinter>
+#include <QPainter>
+#include <QTableWidget>
+#include <QHeaderView>
+#include <QDateTime>
+#include <QTextStream>
+#include <QCheckBox>
+#include <QMessageBox>
+#include <QFont>
+#include <algorithm>
+#include <QPdfWriter>
+#include <QPageLayout>
+#include <QTextDocument>
+#include <QRegularExpression>
+
+// -------- ProjectSettingsDialog --------
+ProjectSettingsDialog::ProjectSettingsDialog(QWidget* parent, ProjectSettings* s) : QDialog(parent) {
+    setWindowTitle(QString::fromUtf8("Ustawienia projektu"));
+    auto lay = new QVBoxLayout(this);
+    auto form = new QFormLayout();
+    auto unit = new QComboBox(); unit->addItems({QStringLiteral("cm"),QStringLiteral("m")});
+    unit->setCurrentIndex(s->defaultUnit == ProjectSettings::Unit::Cm ? 0 : 1);
+    auto decimals = new QSpinBox(); decimals->setRange(0,3); decimals->setValue(s->decimals);
+    auto buffer = new QDoubleSpinBox(); buffer->setRange(0,100000); buffer->setDecimals(1); buffer->setValue(s->defaultBufferCm);
+    auto colorBtn = new QPushButton(QString::fromUtf8("Wybierz kolor…"));
+    auto lw = new QSpinBox(); lw->setRange(1,8); lw->setValue(s->lineWidthPx);
+    form->addRow(QString::fromUtf8("Jednostka domyślna:"), unit);
+    form->addRow(QString::fromUtf8("Zaokrąglenie:"), decimals);
+    form->addRow(QString::fromUtf8("Domyślny zapas [cm]:"), buffer);
+    form->addRow(QString::fromUtf8("Kolor pomiarów:"), colorBtn);
+    form->addRow(QString::fromUtf8("Grubość linii [px]:"), lw);
+    lay->addLayout(form);
+    auto buttons = new QDialogButtonBox(QDialogButtonBox::Ok|QDialogButtonBox::Cancel);
+    lay->addWidget(buttons);
+    QColor chosen = s->defaultMeasureColor;
+    QObject::connect(colorBtn, &QPushButton::clicked, this, [&, s](){
+        QColor c = QColorDialog::getColor(s->defaultMeasureColor, this, QString::fromUtf8("Kolor pomiarów"));
+        if (c.isValid()) chosen = c;
+    });
+    QObject::connect(buttons, &QDialogButtonBox::accepted, this, [=](){
+        s->defaultUnit = unit->currentIndex()==0 ? ProjectSettings::Unit::Cm : ProjectSettings::Unit::M;
+        s->decimals = decimals->value();
+        s->defaultBufferCm = buffer->value();
+        s->defaultMeasureColor = chosen;
+        s->lineWidthPx = lw->value();
+        accept();
+    });
+    QObject::connect(buttons, &QDialogButtonBox::rejected, this, &QDialog::reject);
+}
+
+// -------- AdvancedMeasureDialog --------
+AdvancedMeasureDialog::AdvancedMeasureDialog(QWidget* parent, ProjectSettings* settings)
+    : QDialog(parent), m_settings(settings) {
+    setWindowTitle(QString::fromUtf8("Pomiar zaawansowany"));
+    auto lay = new QVBoxLayout(this);
+    auto form = new QFormLayout();
+    m_name = new QLineEdit(); m_name->setPlaceholderText(QString::fromUtf8("Nazwa pomiaru"));
+    m_unit = new QComboBox(); m_unit->addItems({QStringLiteral("cm"),QStringLiteral("m")});
+    m_unit->setCurrentIndex(settings->defaultUnit == ProjectSettings::Unit::Cm ? 0 : 1);
+    m_buffer = new QDoubleSpinBox(); m_buffer->setRange(0,100000); m_buffer->setDecimals(1);
+    m_buffer->setValue(settings->defaultBufferCm);
+    m_colorBtn = new QPushButton(QString::fromUtf8("Wybierz kolor…"));
+    m_chosen = settings->defaultMeasureColor;
+    form->addRow(QString::fromUtf8("Nazwa:"), m_name);
+    form->addRow(QString::fromUtf8("Jednostka:"), m_unit);
+    form->addRow(QString::fromUtf8("Domyślny zapas:"), m_buffer);
+    form->addRow(QString::fromUtf8("Kolor linii:"), m_colorBtn);
+    lay->addLayout(form);
+    auto buttons = new QDialogButtonBox(QDialogButtonBox::Ok|QDialogButtonBox::Cancel);
+    lay->addWidget(buttons);
+    QObject::connect(m_colorBtn, &QPushButton::clicked, this, [this](){
+        QColor c = QColorDialog::getColor(m_chosen, this, QString::fromUtf8("Kolor linii"));
+        if (c.isValid()) m_chosen = c;
+    });
+    QObject::connect(buttons, &QDialogButtonBox::accepted, this, [this](){ accept(); });
+    QObject::connect(buttons, &QDialogButtonBox::rejected, this, &QDialog::reject);
+}
+QString AdvancedMeasureDialog::name() const { return m_name->text(); }
+AdvancedMeasureDialog::Unit AdvancedMeasureDialog::unit() const { return m_unit->currentIndex()==0 ? Unit::Cm : Unit::M; }
+double AdvancedMeasureDialog::bufferValue() const { return m_buffer->value(); }
+QColor AdvancedMeasureDialog::color() const { return m_chosen; }
+
+// -------- FinalBufferDialog --------
+FinalBufferDialog::FinalBufferDialog(QWidget* parent, Unit u) : QDialog(parent) {
+    setWindowTitle(QString::fromUtf8("Zapas końcowy"));
+    auto lay = new QVBoxLayout(this);
+    auto form = new QFormLayout();
+    m_buffer = new QDoubleSpinBox(); m_buffer->setRange(0,100000); m_buffer->setDecimals(1);
+    m_unit = new QComboBox(); m_unit->addItems({QStringLiteral("cm"),QStringLiteral("m")}); m_unit->setCurrentIndex(u==Unit::Cm?0:1);
+    form->addRow(QString::fromUtf8("Zapas:"), m_buffer);
+    form->addRow(QString::fromUtf8("Jednostka:"), m_unit);
+    lay->addLayout(form);
+    auto buttons = new QDialogButtonBox(QDialogButtonBox::Ok|QDialogButtonBox::Cancel);
+    lay->addWidget(buttons);
+    QObject::connect(buttons, &QDialogButtonBox::accepted, this, [this](){ accept(); });
+    QObject::connect(buttons, &QDialogButtonBox::rejected, this, &QDialog::reject);
+}
+double FinalBufferDialog::bufferValue() const { return m_buffer->value(); }
+FinalBufferDialog::Unit FinalBufferDialog::unit() const { return m_unit->currentIndex()==0 ? Unit::Cm : Unit::M; }
+
+// -------- EditMeasureDialog --------
+EditMeasureDialog::EditMeasureDialog(QWidget* parent, ProjectSettings* settings, Measure* measure)
+: QDialog(parent), m_settings(settings), m(measure) {
+    setWindowTitle(QString::fromUtf8("Edytuj pomiar"));
+    auto lay = new QVBoxLayout(this);
+    auto form = new QFormLayout();
+    m_name = new QLineEdit(measure->name);
+    m_unit = new QComboBox(); m_unit->addItems({QStringLiteral("cm"),QStringLiteral("m")});
+    m_unit->setCurrentIndex(measure->unit=="cm"?0:1);
+    m_bufDefault = new QDoubleSpinBox(); m_bufDefault->setRange(0,100000); m_bufDefault->setDecimals(1);
+    m_bufFinal = new QDoubleSpinBox(); m_bufFinal->setRange(0,100000); m_bufFinal->setDecimals(1);
+    m_bufDefault->setValue(measure->bufferDefaultMeters*100.0);
+    m_bufFinal->setValue(measure->bufferFinalMeters*100.0);
+    m_colorBtn = new QPushButton(QString::fromUtf8("Wybierz kolor…")); m_chosen = measure->color;
+    form->addRow(QString::fromUtf8("Nazwa:"), m_name);
+    form->addRow(QString::fromUtf8("Jednostka:"), m_unit);
+    form->addRow(QString::fromUtf8("Zapas domyślny [cm]:"), m_bufDefault);
+    form->addRow(QString::fromUtf8("Zapas końcowy [cm]:"), m_bufFinal);
+    form->addRow(QString::fromUtf8("Kolor:"), m_colorBtn);
+    lay->addLayout(form);
+    auto buttons = new QDialogButtonBox(QDialogButtonBox::Ok|QDialogButtonBox::Cancel);
+    lay->addWidget(buttons);
+    QObject::connect(m_colorBtn, &QPushButton::clicked, this, [this](){
+        QColor c = QColorDialog::getColor(m_chosen, this, QString::fromUtf8("Kolor linii"));
+        if (c.isValid()) m_chosen = c;
+    });
+    QObject::connect(buttons, &QDialogButtonBox::accepted, this, [this](){
+        m->name = m_name->text();
+        m->unit = (m_unit->currentIndex()==0) ? "cm" : "m";
+        m->bufferDefaultMeters = m_bufDefault->value()/100.0;
+        m->bufferFinalMeters = m_bufFinal->value()/100.0;
+        m->color = m_chosen;
+        accept();
+    });
+    QObject::connect(buttons, &QDialogButtonBox::rejected, this, &QDialog::reject);
+}
+
+// -------- ReportDialog --------
+ReportDialog::ReportDialog(QWidget* parent, ProjectSettings* settings, std::vector<Measure>* measures)
+: QDialog(parent), m_settings(settings), m_measures(measures) {
+    const int COL_CHECK   = 0;
+    const int COL_ID      = 1;
+    const int COL_NAME    = 2;
+    const int COL_TYPE    = 3;
+    const int COL_LEN_M   = 4;
+    const int COL_SUM_M   = 5;
+    const int COL_BUF_START = 6;
+    const int COL_BUF_END   = 7;
+    const int COL_COLOR = 8;
+    const int COL_DATE = 9;
+    const int COL_EDIT = 10;
+    const int COL_DEL = 11;
+
+    setWindowTitle(QString::fromUtf8("Raport pomiarów"));
+    auto lay = new QVBoxLayout(this);
+    m_table = new QTableWidget(this);
+    QStringList headers = {
+        QStringLiteral("Check"),
+        QStringLiteral("ID"),
+        QString::fromUtf8("Nazwa"),
+        QString::fromUtf8("Typ"),
+        QString::fromUtf8("Długość"),
+        QString::fromUtf8("Suma z zapasami"),
+        QString::fromUtf8("Zapas początkowy"),
+        QString::fromUtf8("Zapas końcowy"),
+        QString::fromUtf8("Kolor"),
+        QString::fromUtf8("Data"),
+        QString::fromUtf8("Edytuj"),
+        QString::fromUtf8("Usuń")
+    };
+    m_table->setColumnCount(headers.size());
+    m_table->setHorizontalHeaderLabels(headers);
+    m_table->horizontalHeader()->setStretchLastSection(false);
+    m_table->verticalHeader()->setVisible(false);
+    m_table->setEditTriggers(QAbstractItemView::NoEditTriggers);
+    m_table->setSelectionBehavior(QAbstractItemView::SelectRows);
+    m_table->setRowCount((int)measures->size());
+
+    auto typeStr = [](const Measure& m)->QString{
+        switch (m.type) {
+            case MeasureType::Linear: return QString::fromUtf8("Liniowy");
+            case MeasureType::Polyline: return QString::fromUtf8("Polilinia");
+            case MeasureType::Advanced: default: return QString::fromUtf8("Zaawansowany");
+        }
+    };
+
+    for (int r=0;r<(int)measures->size();++r) {
+        const auto& m = (*measures)[r];
+        auto chk = new QTableWidgetItem(); chk->setFlags(Qt::ItemIsEnabled|Qt::ItemIsUserCheckable|Qt::ItemIsSelectable);
+        chk->setCheckState(Qt::Checked);
+        m_table->setItem(r,COL_CHECK,chk);
+        auto set = [&](int c, const QString& t){ m_table->setItem(r,c, new QTableWidgetItem(t)); };
+        set(COL_ID, QString::number(m.id));
+        set(COL_NAME, m.name);
+        set(COL_TYPE, typeStr(m));
+        set(COL_LEN_M, QString::number(m.lengthMeters,'f',3) + " m");
+        set(COL_SUM_M, QString::number(m.totalWithBufferMeters,'f',3) + " m");
+        QString bufStart = QString("%1 cm").arg(m.bufferDefaultMeters*100.0,0,'f',m_settings->decimals);
+        QString bufEnd   = QString("%1 cm").arg(m.bufferFinalMeters*100.0,0,'f',m_settings->decimals);
+        set(COL_BUF_START, bufStart);
+        set(COL_BUF_END, bufEnd);
+        /* color swatch cell */
+        {
+            QString hex = m.color.name();
+            QWidget* w = new QWidget();
+            w->setMinimumSize(QSize(20, 16));
+            w->setMaximumSize(QSize(20, 16));
+            w->setStyleSheet(QString("background:%1;border:1px solid #666;").arg(hex));
+            m_table->setCellWidget(r, COL_COLOR, w);
+            auto *it = new QTableWidgetItem(QString());
+            it->setData(Qt::UserRole, hex);
+            m_table->setItem(r, COL_COLOR, it);
+        }
+        set(COL_DATE, m.createdAt.toString("yyyy-MM-dd hh:mm"));
+
+        QWidget* colorCell = new QWidget();
+        colorCell->setMinimumSize(24, 18);
+        colorCell->setMaximumSize(24, 18);
+        colorCell->setStyleSheet(QString("background:%1; border:1px solid #666;").arg(m.color.name()));
+        
+        auto btnEdit = new QPushButton(QString::fromUtf8("Edytuj"));
+        m_table->setCellWidget(r, COL_EDIT, btnEdit);
+        QObject::connect(btnEdit, &QPushButton::clicked, this, [=]() {
+            Measure& ref = (*m_measures)[r];
+            EditMeasureDialog ed(this, m_settings, &ref);
+            if (ed.exec()==QDialog::Accepted) {
+                ref.totalWithBufferMeters = ref.lengthMeters + ref.bufferDefaultMeters + ref.bufferFinalMeters;
+                m_table->item(r,COL_NAME)->setText(ref.name);
+                m_table->item(r,COL_LEN_M)->setText(QString::number(ref.lengthMeters,'f',3) + " m");
+                m_table->item(r,COL_SUM_M)->setText(QString::number(ref.totalWithBufferMeters,'f',3) + " m");
+                QString bufStart = QString("%1 cm").arg(ref.bufferDefaultMeters*100.0,0,'f',m_settings->decimals);
+                QString bufEnd   = QString("%1 cm").arg(ref.bufferFinalMeters*100.0,0,'f',m_settings->decimals);
+                m_table->item(r,COL_BUF_START)->setText(bufStart);
+                m_table->item(r,COL_BUF_END)->setText(bufEnd);
+                if (auto w = m_table->cellWidget(r, /*REMOVED_COLOR*/COL_TYPE)) {
+                    w->setStyleSheet(QString("background:%1; border:1px solid #666;").arg(ref.color.name()));
+                }
+                // Update date on edit? keep original createdAt.
+                recalc();
+            }
+        });
+
+        auto btnDel = new QPushButton(QString::fromUtf8("Usuń"));
+        m_table->setCellWidget(r, COL_DEL, btnDel);
+        QObject::connect(btnDel, &QPushButton::clicked, this, [=]() {
+            if (QMessageBox::question(this, QString::fromUtf8("Usuń pomiar"), QString::fromUtf8("Na pewno usunąć ten pomiar?")) != QMessageBox::Yes) return;
+            m_measures->erase(m_measures->begin() + r);
+            m_table->removeRow(r);
+            recalc();
+        });
+    }
+    lay->addWidget(m_table);
+
+    auto btnsLay = new QHBoxLayout();
+    auto btnCsv = new QPushButton(QString::fromUtf8("Eksport CSV"));
+    auto btnPdf = new QPushButton(QString::fromUtf8("Eksport PDF"));
+    auto btnTxt = new QPushButton(QString::fromUtf8("Eksport TXT"));
+    btnsLay->addWidget(btnCsv); btnsLay->addWidget(btnPdf); btnsLay->addWidget(btnTxt); btnsLay->addStretch();
+    lay->addLayout(btnsLay);
+
+    auto foot = new QHBoxLayout();
+    m_sumLen = new QLabel(QString::fromUtf8("Suma długości: 0.000 m"));
+    m_sumBuf = new QLabel(QString::fromUtf8("Suma zapasów: 0.000 m"));
+    m_sumTotal = new QLabel(QString::fromUtf8("Suma łączna: 0.000 m"));
+    foot->addWidget(m_sumLen); foot->addSpacing(20);
+    foot->addWidget(m_sumBuf); foot->addSpacing(20);
+    foot->addWidget(m_sumTotal); foot->addStretch();
+    lay->addLayout(foot);
+
+    QObject::connect(m_table, &QTableWidget::itemChanged, this, [=](QTableWidgetItem* it){
+        if (it && it->column()==COL_CHECK) recalc();
+    });
+
+    // Fit window size to content
+    m_table->resizeColumnsToContents();
+    int totalW = 0;
+    for (int c=0;c<m_table->columnCount();++c) totalW += m_table->columnWidth(c);
+    totalW += 40;
+    int rowH = m_table->verticalHeader()->defaultSectionSize();
+    int totalH = 100 + (rowH * (m_table->rowCount()+1)) + 180;
+    totalW = qMin(totalW, 1400);
+    totalH = qMin(totalH, 900);
+    resize(totalW, totalH);
+
+    
+    // CSV export with UTF-8, tick mark and hex color
+    // CSV export (UTF-8 + BOM; ';' separator; CRLF; ✓ for Check; hex in Kolor)
+QObject::connect(btnCsv, &QPushButton::clicked, this, [this](){
+    QString fn = QFileDialog::getSaveFileName(this, QString::fromUtf8("Zapisz CSV"),
+                                              QStringLiteral("pomiary.csv"),
+                                              QStringLiteral("CSV (*.csv)"));
+    if (fn.isEmpty()) return;
+    if (!fn.endsWith(QStringLiteral(".csv"), Qt::CaseInsensitive)) fn += QStringLiteral(".csv");
+
+    QFile f(fn);
+    if (!f.open(QIODevice::WriteOnly | QIODevice::Truncate | QIODevice::Text)) return;
+
+    QTextStream out(&f);
+#if QT_VERSION >= QT_VERSION_CHECK(6,0,0)
+    out.setEncoding(QStringConverter::Utf8);
+#else
+    out.setCodec("UTF-8");
+#endif
+    out.setGenerateByteOrderMark(true);
+
+    auto esc = [](QString s){
+        s.replace('"', "\"\"");
+        if (s.contains(QLatin1Char(';')) || s.contains(QLatin1Char('"')) ||
+            s.contains(QLatin1Char('\n')) || s.contains(QLatin1Char('\r')))
+            s = QLatin1Char('"') + s + QLatin1Char('"');
+        return s;
+    };
+    auto writeRow = [&](const QStringList& cells){
+        QStringList c = cells;
+        for (QString &x : c) x = esc(x);
+        out << c.join(QLatin1Char(';')) << "\r\n"; // CRLF for Excel
+    };
+
+    const int colCount = qMin(10, m_table->columnCount()); // hide Edit/Remove
+    // Header from current table
+    QStringList header;
+    for (int c=0; c<colCount; ++c) {
+        QTableWidgetItem* h = m_table->horizontalHeaderItem(c);
+        header << (h ? h->text() : QStringLiteral("C%1").arg(c));
+    }
+    writeRow(header);
+
+    const int kolorCol = header.indexOf(QString::fromUtf8("Kolor"));
+
+    for (int r=0; r<m_table->rowCount(); ++r) {
+        QStringList row;
+        for (int c=0; c<colCount; ++c) {
+            if (c == 0) {
+                QTableWidgetItem* item = m_table->item(r,0);
+                row << ((item && item->checkState()==Qt::Checked) ? QString(QChar(0x2713)) : QString());
+            } else if (c == kolorCol) {
+                QTableWidgetItem* item = m_table->item(r,c);
+                QString hx = item ? item->data(Qt::UserRole).toString() : QString();
+                if (hx.isEmpty() && item) hx = item->text();
+                row << hx;
+            } else {
+                QTableWidgetItem* item = m_table->item(r,c);
+                row << (item ? item->text() : QString());
+            }
+        }
+        writeRow(row);
+    }
+    out.flush();
+});
+
+    // PDF export (QPdfWriter, no physical printer involved)
+    // PDF export with QPdfWriter (no printer), centered table, colored borders
+QObject::connect(btnPdf, &QPushButton::clicked, this, [this](){
+    QString fn = QFileDialog::getSaveFileName(this, QString::fromUtf8("Zapisz PDF"),
+                                              QStringLiteral("pomiary.pdf"),
+                                              QStringLiteral("PDF (*.pdf)"));
+    if (fn.isEmpty()) return;
+    if (!fn.endsWith(QStringLiteral(".pdf"), Qt::CaseInsensitive)) fn += QStringLiteral(".pdf");
+
+    QPdfWriter pdf(fn);
+    QPageLayout layout(QPageSize(QPageSize::A4), QPageLayout::Portrait,
+                       QMarginsF(12,12,12,12), QPageLayout::Millimeter);
+    pdf.setPageLayout(layout);
+    pdf.setResolution(300);
+
+    QPainter painter(&pdf);
+    if (!painter.isActive()) return;
+
+    const QRect contentPt = layout.paintRectPoints();
+
+    QTextDocument doc;
+    if (doc.documentLayout()) doc.documentLayout()->setPaintDevice(&pdf);
+    doc.setDocumentMargin(0);
+    doc.setPageSize(QSizeF(contentPt.size()));
+    QTextCursor cur(&doc);
+
+    // Title + 2x enter
+    {
+        QTextBlockFormat bf; bf.setAlignment(Qt::AlignLeft);
+        cur.setBlockFormat(bf);
+        QTextCharFormat cf; QFont f = painter.font(); f.setBold(true); f.setPointSizeF(f.pointSizeF()+6); cf.setFont(f);
+        cur.setCharFormat(cf);
+        cur.insertText(QString::fromUtf8("Raport pomiarów — %1")
+                       .arg(QDateTime::currentDateTime().toString(QStringLiteral("yyyy-MM-dd HH:mm"))));
+        cur.insertBlock(); QTextBlockFormat gap; gap.setTopMargin(20); cur.setBlockFormat(gap); cur.insertBlock();
+    }
+
+    // Table
+    const int colCount = qMin(10, m_table->columnCount());
+    const int rows     = m_table->rowCount();
+
+    QTextTableFormat tf;
+    tf.setAlignment(Qt::AlignHCenter);
+    tf.setWidth(QTextLength(QTextLength::PercentageLength, 100.0));
+    tf.setBorder(0.8);
+    tf.setBorderBrush(QBrush(QColor(QStringLiteral("#666666")))); // visible outline
+    tf.setBorderStyle(QTextFrameFormat::BorderStyle_Solid);
+    tf.setCellPadding(0);
+    tf.setCellSpacing(0);
+    QList<QTextLength> widths; for (int c=0;c<colCount;++c) widths << QTextLength(QTextLength::PercentageLength, 100.0/colCount);
+    tf.setColumnWidthConstraints(widths);
+
+    QTextTable* table = cur.insertTable(rows+1, colCount, tf);
+
+    // Grid for each cell
+    QTextTableCellFormat gridFmt;
+    gridFmt.setBorder(0.5);
+    gridFmt.setBorderBrush(QBrush(QColor(QStringLiteral("#999999"))));
+    gridFmt.setBorderStyle(QTextFrameFormat::BorderStyle_Solid);
+
+    auto put = [&](int r,int c,const QString& s){
+        QTextTableCell cell = table->cellAt(r,c);
+        cell.setFormat(gridFmt); // apply grid
+        QTextCursor cc = cell.firstCursorPosition();
+        QTextBlockFormat bf; bf.setAlignment(Qt::AlignHCenter); bf.setLeftMargin(4); bf.setRightMargin(4);
+        cc.setBlockFormat(bf);
+        cc.insertText(s);
+    };
+
+    // Header
+    for (int c=0;c<colCount;++c){
+        QTableWidgetItem* h = m_table->horizontalHeaderItem(c);
+        put(0,c, h? h->text(): QStringLiteral("C%1").arg(c));
+    }
+
+    int kolorCol = -1;
+    for (int c=0;c<colCount;++c){
+        QTableWidgetItem* h = m_table->horizontalHeaderItem(c);
+        if (h && h->text().trimmed().toLower() == QString::fromUtf8("kolor"))
+            kolorCol = c;
+    }
+
+    // Rows
+    for (int r=0;r<rows;++r){
+        for (int c=0;c<colCount;++c){
+            QTableWidgetItem* it = m_table->item(r,c);
+            QString s;
+            if (c==0){
+                s = (it && it->checkState()==Qt::Checked) ? QString(QChar(0x2713)) : QString();
+            } else {
+                s = it ? it->text() : QString();
+            }
+            put(r+1,c,s);
+
+            if (c==kolorCol && it){
+                QString hx = it->data(Qt::UserRole).toString();
+                if (hx.isEmpty()) hx = it->text();
+                if (!hx.isEmpty()){
+                    QTextTableCell cell = table->cellAt(r+1,c);
+                    QTextCharFormat fmt = cell.format();
+                    fmt.setBackground(QBrush(QColor(hx)));
+                    cell.setFormat(fmt);
+                }
+            }
+        }
+    }
+
+    // Bottom sums
+    cur.movePosition(QTextCursor::End); cur.insertBlock();
+    { QTextBlockFormat gap2; gap2.setTopMargin(20); cur.setBlockFormat(gap2); cur.insertBlock(); }
+    {
+        QTextCharFormat scf; QFont sf = painter.font(); sf.setPointSizeF(sf.pointSizeF()+2); sf.setBold(true); scf.setFont(sf);
+        cur.setCharFormat(scf);
+        const QString sums = QStringList{ m_sumLen->text(), m_sumBuf->text(), m_sumTotal->text() }
+                             .join(QLatin1Char('\n'));
+        cur.insertText(sums);
+    }
+
+    // Render into A4 content rect
+    painter.save();
+    painter.translate(contentPt.left(), contentPt.top());
+    doc.drawContents(&painter, QRectF(QPointF(0,0), contentPt.size()));
+    painter.restore();
+    painter.end();
+});
+
+    // TXT export
+    
+// TXT export disabled
+#if 0
+QObject::connect(btnTxt, &QPushButton::clicked, this, [=](){
+        QString fn = QFileDialog::getSaveFileName(this, QString::fromUtf8("Zapisz TXT"), QStringLiteral("pomiary.txt"), QStringLiteral("Text (*.txt)"));
+        if (fn.isEmpty()) return; QFile f(fn);
+        if (f.open(QIODevice::WriteOnly|QIODevice::Text)) {
+            QTextStream ts(&f); ts.setEncoding(QStringConverter::Utf8);
+            for (int i=0;i<m_table->rowCount();++i) {
+                QString chk = m_table->item(i,COL_CHECK)->checkState()==Qt::Checked ? QString(QChar(0x2713)) : QString();
+                int id = m_table->item(i,COL_ID)->text().toInt();
+                auto it = std::find_if(m_measures->begin(), m_measures->end(), [&](const Measure& mm){ return mm.id==id; });
+                QString color = (it!=m_measures->end()) ? it->color.name() : QStringLiteral("#FFFFFF");
+                auto cell = [&](int c){ return m_table->item(i,c)?m_table->item(i,c)->text():QString(); };
+                ts << chk << "\t" << cell(COL_ID) << "\t" << cell(COL_NAME) << "\t" << color << "\t" << cell(COL_TYPE) << "\t"
+                   << cell(COL_LEN_M) << "\t" << cell(COL_SUM_M) << "\t" << cell(COL_BUF_START) << "\t" << cell(COL_BUF_END) << "\t" << cell(COL_DATE) << "\n";
+            }
+            ts << m_sumLen->text() << "\n" << m_sumBuf->text() << "\n" << m_sumTotal->text() << "\n";
+        }
+    });
+#endif
+
+
+    recalc();
+}
+
+void ReportDialog::recalc(){
+    if (!m_table || m_table->rowCount()==0) {
+        m_sumLen->setText(QString::fromUtf8("Suma długości zmierzonych: 0.000 m"));
+        m_sumBuf->setText(QString::fromUtf8("Suma zapasów: 0.000 m"));
+        m_sumTotal->setText(QString::fromUtf8("Suma łączna: 0.000 m"));
+        return;
+    }
+const int COL_CHECK     = 0;
+    const int COL_LEN_M     = 4; // Długość [m] (tekst z " m")
+    const int COL_BUF_START = 6; // cm
+    const int COL_BUF_END   = 7; // cm
+
+    double sumLenM = 0.0;
+    double sumBufM = 0.0;
+
+    for (int r=0; r<m_table->rowCount(); ++r) {
+        auto chk = m_table->item(r, COL_CHECK);
+        if (!chk || chk->checkState() != Qt::Checked) continue;
+
+        // --- Długość (m)
+        double lenM = 0.0;
+        if (auto itLen = m_table->item(r, COL_LEN_M)) {
+            // Prefer ukryty numeric (UserRole+1) jeżeli jest
+            lenM = itLen->data(Qt::UserRole+1).toDouble();
+            if (lenM == 0.0) {
+                QString t = itLen->text();
+                t.remove(" m");
+                bool ok=false;
+                lenM = QLocale().toDouble(t, &ok);
+                if (!ok) lenM = t.toDouble(); // awaryjnie
+            }
+        }
+
+        // --- Zapas (cm -> m)
+        auto parseCmToM = [](QTableWidgetItem* it)->double {
+            if (!it) return 0.0;
+            QString t = it->text();
+            t.remove(" cm");
+            bool ok=false;
+            double cm = QLocale().toDouble(t, &ok);
+            if (!ok) cm = t.toDouble();
+            return cm / 100.0;
+        };
+        double bufStartM = parseCmToM(m_table->item(r, COL_BUF_START));
+        double bufEndM   = parseCmToM(m_table->item(r, COL_BUF_END));
+
+        sumLenM += lenM;
+        sumBufM += (bufStartM + bufEndM);
+    }
+
+    double sumTotalM = sumLenM + sumBufM;
+
+    // Etykiety
+    m_sumLen->setText(QString::fromUtf8("Suma długości zmierzonych: ") + QString::number(sumLenM, 'f', 3) + " m");
+    m_sumBuf->setText(QString::fromUtf8("Suma zapasów: ") + QString::number(sumBufM, 'f', 3) + " m");
+    m_sumTotal->setText(QString::fromUtf8("Suma łączna: ") + QString::number(sumTotalM, 'f', 3) + " m");
+}
