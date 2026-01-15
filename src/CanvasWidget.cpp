@@ -909,9 +909,16 @@ void CanvasWidget::mousePressEvent(QMouseEvent* ev) {
         }
         // Jeśli kliknięto wewnątrz dymka, rozpocznij przeciąganie całego dymka
         int bubbleIdx = -1;
+        double marginWorldX = 0.0;
+        double marginWorldY = 0.0;
+        if (m_pixelsPerMeter * m_zoom != 0.0) {
+            marginWorldX = 8.0 / (m_pixelsPerMeter * m_zoom);
+            marginWorldY = 6.0 / (m_pixelsPerMeter * m_zoom);
+        }
         for (int i = 0; i < (int)m_textItems.size(); ++i) {
             const auto &ti = m_textItems[i];
-            if (ti.boundingRect.contains(wpos)) {
+            QRectF hitRect = ti.boundingRect.adjusted(-marginWorldX, -marginWorldY, marginWorldX, marginWorldY);
+            if (hitRect.contains(wpos)) {
                 bubbleIdx = i;
                 break;
             }
@@ -921,8 +928,8 @@ void CanvasWidget::mousePressEvent(QMouseEvent* ev) {
             m_selectedMeasureIndex = -1;
             m_isDraggingSelectedText = true;
             m_isDraggingSelectedAnchor = false;
-            // Offset między kliknięciem a pozycją kotwicy (punktem pos)
-            m_dragStartOffset = wpos - m_textItems[bubbleIdx].pos;
+            // Offset między kliknięciem a lewym górnym rogiem dymka
+            m_dragStartOffset = wpos - m_textItems[bubbleIdx].boundingRect.topLeft();
             update();
             return;
         }
@@ -985,7 +992,14 @@ void CanvasWidget::mousePressEvent(QMouseEvent* ev) {
                 return;
             }
             // Sprawdź, czy kliknięto wewnątrz obszaru dymka (boundingRect)
-            if (m_tempTextItem.boundingRect.contains(wpos)) {
+            double marginWorldX = 0.0;
+            double marginWorldY = 0.0;
+            if (m_pixelsPerMeter * m_zoom != 0.0) {
+                marginWorldX = 8.0 / (m_pixelsPerMeter * m_zoom);
+                marginWorldY = 6.0 / (m_pixelsPerMeter * m_zoom);
+            }
+            QRectF hitRect = m_tempTextItem.boundingRect.adjusted(-marginWorldX, -marginWorldY, marginWorldX, marginWorldY);
+            if (hitRect.contains(wpos)) {
                 // Rozpocznij przeciąganie dymka; zapamiętaj offset
                 m_isDraggingTempBubble = true;
                 m_isDraggingTempAnchor = false;
@@ -1127,12 +1141,11 @@ void CanvasWidget::mouseMoveEvent(QMouseEvent* ev) {
     // Jeśli przeciągamy zaznaczony tekst w trybie zaznaczania lub jego kotwicę
     if (m_mode == ToolMode::Select && hasSelectedText()) {
         if (m_isDraggingSelectedText) {
-            // Przeciąganie całego dymka – przesuwamy kotwicę i boundingRect o ten sam wektor
+            // Przeciąganie całego dymka – przesuwamy tylko boundingRect
             QPointF wpos = toWorld(ev->localPos());
             TextItem &ti = m_textItems[m_selectedTextIndex];
-            QPointF newPos = wpos - m_dragStartOffset;
-            QPointF delta = newPos - ti.pos;
-            ti.pos = newPos;
+            QPointF newTopLeft = wpos - m_dragStartOffset;
+            QPointF delta = newTopLeft - ti.boundingRect.topLeft();
             ti.boundingRect.translate(delta.x(), delta.y());
             update();
             return;
