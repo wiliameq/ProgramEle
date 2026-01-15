@@ -804,7 +804,7 @@ void CanvasWidget::drawMeasures(QPainter& p) {
         p.setPen(txt.color);
         p.drawText(textRect, Qt::AlignLeft | Qt::AlignTop | Qt::TextWordWrap, txt.text);
         // Jeśli element jest zaznaczony, narysuj czerwone przerywane obramowanie wokół dymka
-        if ((int)ti == m_selectedTextIndex) {
+        if ((int)ti == m_selectedTextIndex && m_debugDrawTextHandles) {
             QPen selPen(QColor(255,0,0));
             selPen.setStyle(Qt::DashLine);
             selPen.setWidth(1);
@@ -889,17 +889,19 @@ void CanvasWidget::drawMeasures(QPainter& p) {
         QRectF textRect = bubbleRect.adjusted(4, 2, -4, -2);
         p.setPen(txt.color);
         p.drawText(textRect, Qt::AlignLeft | Qt::AlignTop | Qt::TextWordWrap, txt.text);
-        // Uchwytowe kropki na rogach i kotwicy
-        QPen handlePen(Qt::black);
-        handlePen.setCosmetic(true);
-        p.setPen(handlePen);
-        p.setBrush(Qt::white);
-        const double handleRadius = 4.0;
-        p.drawEllipse(bubbleRect.topLeft(), handleRadius, handleRadius);
-        p.drawEllipse(bubbleRect.topRight(), handleRadius, handleRadius);
-        p.drawEllipse(bubbleRect.bottomLeft(), handleRadius, handleRadius);
-        p.drawEllipse(bubbleRect.bottomRight(), handleRadius, handleRadius);
-        p.drawEllipse(anchorScreen, handleRadius, handleRadius);
+        if (m_debugDrawTextHandles) {
+            // Uchwytowe kropki na rogach i kotwicy
+            QPen handlePen(Qt::black);
+            handlePen.setCosmetic(true);
+            p.setPen(handlePen);
+            p.setBrush(Qt::white);
+            const double handleRadius = 5.0;
+            p.drawEllipse(bubbleRect.topLeft(), handleRadius, handleRadius);
+            p.drawEllipse(bubbleRect.topRight(), handleRadius, handleRadius);
+            p.drawEllipse(bubbleRect.bottomLeft(), handleRadius, handleRadius);
+            p.drawEllipse(bubbleRect.bottomRight(), handleRadius, handleRadius);
+            p.drawEllipse(anchorScreen, handleRadius, handleRadius);
+        }
         p.setFont(oldFont);
         p.setPen(oldPen);
     }
@@ -1015,7 +1017,7 @@ void CanvasWidget::mousePressEvent(QMouseEvent* ev) {
         // Sprawdź, czy kliknięto w uchwyt rozmiaru któregoś dymka
         int resizeIdx = -1;
         ResizeHandle handle = ResizeHandle::None;
-        double handleThreshold = 8.0 / (m_pixelsPerMeter * m_zoom);
+        double handleThreshold = 10.0 / (m_pixelsPerMeter * m_zoom);
         for (int i = 0; i < (int)m_textItems.size(); ++i) {
             const auto &ti = m_textItems[i];
             QRectF bubbleRect = ti.boundingRect.adjusted(-marginWorldX, -marginWorldY, marginWorldX, marginWorldY);
@@ -1032,6 +1034,8 @@ void CanvasWidget::mousePressEvent(QMouseEvent* ev) {
             m_isResizingSelectedBubble = true;
             m_resizeStartRect = m_textItems[resizeIdx].boundingRect.adjusted(-marginWorldX, -marginWorldY, marginWorldX, marginWorldY);
             m_resizeStartPos = wpos;
+            m_isDraggingSelectedText = false;
+            m_isDraggingSelectedAnchor = false;
             update();
             return;
         }
@@ -1101,13 +1105,15 @@ void CanvasWidget::mousePressEvent(QMouseEvent* ev) {
             }
             QRectF bubbleRect = m_tempTextItem.boundingRect.adjusted(-marginWorldX, -marginWorldY, marginWorldX, marginWorldY);
             // Sprawdź, czy kliknięto w uchwyt rozmiaru dymka
-            double handleThreshold = 8.0 / (m_pixelsPerMeter * m_zoom);
+            double handleThreshold = 10.0 / (m_pixelsPerMeter * m_zoom);
             ResizeHandle handle = hitResizeHandle(bubbleRect, wpos, handleThreshold);
             if (handle != ResizeHandle::None) {
                 m_resizeHandle = handle;
                 m_isResizingTempBubble = true;
                 m_resizeStartRect = bubbleRect;
                 m_resizeStartPos = wpos;
+                m_isDraggingTempBubble = false;
+                m_isDraggingTempAnchor = false;
                 return;
             }
             // Sprawdź, czy kliknięcie znajduje się w pobliżu kotwicy
@@ -1119,6 +1125,7 @@ void CanvasWidget::mousePressEvent(QMouseEvent* ev) {
                 // Rozpocznij przeciąganie kotwicy
                 m_isDraggingTempAnchor = true;
                 m_isDraggingTempBubble = false;
+                m_isResizingTempBubble = false;
                 return;
             }
             // Sprawdź, czy kliknięto wewnątrz obszaru dymka (boundingRect)
@@ -1127,6 +1134,7 @@ void CanvasWidget::mousePressEvent(QMouseEvent* ev) {
                 // Rozpocznij przeciąganie dymka; zapamiętaj offset
                 m_isDraggingTempBubble = true;
                 m_isDraggingTempAnchor = false;
+                m_isResizingTempBubble = false;
                 m_tempDragOffset = wpos - m_tempTextItem.boundingRect.topLeft();
                 return;
             }
@@ -1352,6 +1360,11 @@ void CanvasWidget::mouseMoveEvent(QMouseEvent* ev) {
             marginWorldY = 6.0 / (m_pixelsPerMeter * m_zoom);
         }
         m_textItems[m_selectedTextIndex].boundingRect = rect.adjusted(marginWorldX, marginWorldY, -marginWorldX, -marginWorldY);
+        if (m_textEdit && m_editingTextIndex == m_selectedTextIndex) {
+            m_textEdit->move(toScreen(m_textItems[m_selectedTextIndex].boundingRect.topLeft()).toPoint());
+            m_textEdit->resize(std::max(40, (int)std::round((rect.width() - marginWorldX * 2) * m_pixelsPerMeter * m_zoom)),
+                               std::max(20, (int)std::round((rect.height() - marginWorldY * 2) * m_pixelsPerMeter * m_zoom)));
+        }
         update();
         return;
     }

@@ -181,6 +181,7 @@ private:
     // Mouse tracking (world coords)
     QPointF m_mouseWorld{0,0};
     bool m_hasMouseWorld = false;
+    bool m_debugDrawTextHandles = true;
 
     // Mode
     ToolMode m_mode = ToolMode::None;
