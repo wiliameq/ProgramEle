@@ -369,6 +369,10 @@ public:
      */
     QColor insertTextColor() const { return m_insertTextColor; }
     /**
+     * Zwraca domyślną czcionkę dla nowo wstawianych elementów tekstowych.
+     */
+    QFont insertTextFont() const { return m_insertTextFont; }
+    /**
      * Zwraca czcionkę zaznaczonego elementu tekstowego lub domyślną czcionkę wstawiania.
      */
     QFont selectedTextFont() const {
