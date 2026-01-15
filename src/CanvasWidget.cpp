@@ -15,12 +15,14 @@
 
 // std::max, std::min, std::sqrt
 #include <cmath>
+#include <algorithm>
 
 #include <QtPdf/QPdfDocument>
 #include <QSize>
 #include <QImage>
 #include <QLineEdit>
 #include <QFontMetrics>
+#include <QPolygonF>
 
 CanvasWidget::CanvasWidget(QWidget* parent, ProjectSettings* settings)
     : QWidget(parent), m_settings(settings) {
@@ -746,8 +748,8 @@ void CanvasWidget::drawMeasures(QPainter& p) {
         QPointF anchorScreen = toScreen(txt.pos);
         // Przygotuj prostokąt dymka: powiększ go o margines.
         // Większy margines poprawia czytelność dymka i oddziela tekst od obramowania.
-        const double marginX = 6.0;
-        const double marginY = 4.0;
+        const double marginX = 8.0;
+        const double marginY = 6.0;
         QRectF bubbleRect = textBox.adjusted(-marginX, -marginY, marginX, marginY);
         // Zapamiętaj aktualne ustawienia pędzla, czcionki i koloru
         QFont oldFont = p.font();
@@ -758,49 +760,45 @@ void CanvasWidget::drawMeasures(QPainter& p) {
         }
         // Stwórz ścieżkę dymka z zaokrąglonymi rogami i strzałką
         QPainterPath calloutPath;
-        const double radius = 6.0;
+        const double radius = 8.0;
         calloutPath.addRoundedRect(bubbleRect, radius, radius);
         // Dodaj strzałkę w zależności od ustawionej kotwicy
+        const double halfBase = 9.0;
         if (txt.anchor == CalloutAnchor::Bottom) {
-            // Szerokość podstawy strzałki (połowa długości) i wysokość strzałki.
-            // Zmieniamy wartości na 8.0, co daje bardziej wyraźny grot strzałki.
-            const double halfBase = 8.0;
-            QPointF baseLeft(bubbleRect.center().x() - halfBase, bubbleRect.bottom());
-            QPointF baseRight(bubbleRect.center().x() + halfBase, bubbleRect.bottom());
-            calloutPath.moveTo(baseLeft);
-            calloutPath.lineTo(anchorScreen);
-            calloutPath.lineTo(baseRight);
-            calloutPath.closeSubpath();
+            double baseX = std::clamp(anchorScreen.x(), bubbleRect.left() + radius, bubbleRect.right() - radius);
+            QPointF baseLeft(baseX - halfBase, bubbleRect.bottom());
+            QPointF baseRight(baseX + halfBase, bubbleRect.bottom());
+            QPolygonF tail;
+            tail << baseLeft << anchorScreen << baseRight;
+            calloutPath.addPolygon(tail);
         } else if (txt.anchor == CalloutAnchor::Top) {
-            const double halfBase = 8.0;
-            QPointF baseLeft(bubbleRect.center().x() - halfBase, bubbleRect.top());
-            QPointF baseRight(bubbleRect.center().x() + halfBase, bubbleRect.top());
-            calloutPath.moveTo(baseLeft);
-            calloutPath.lineTo(anchorScreen);
-            calloutPath.lineTo(baseRight);
-            calloutPath.closeSubpath();
+            double baseX = std::clamp(anchorScreen.x(), bubbleRect.left() + radius, bubbleRect.right() - radius);
+            QPointF baseLeft(baseX - halfBase, bubbleRect.top());
+            QPointF baseRight(baseX + halfBase, bubbleRect.top());
+            QPolygonF tail;
+            tail << baseLeft << anchorScreen << baseRight;
+            calloutPath.addPolygon(tail);
         } else if (txt.anchor == CalloutAnchor::Left) {
-            const double halfBase = 8.0;
-            QPointF baseTop(bubbleRect.left(), bubbleRect.center().y() - halfBase);
-            QPointF baseBottom(bubbleRect.left(), bubbleRect.center().y() + halfBase);
-            calloutPath.moveTo(baseTop);
-            calloutPath.lineTo(anchorScreen);
-            calloutPath.lineTo(baseBottom);
-            calloutPath.closeSubpath();
+            double baseY = std::clamp(anchorScreen.y(), bubbleRect.top() + radius, bubbleRect.bottom() - radius);
+            QPointF baseTop(bubbleRect.left(), baseY - halfBase);
+            QPointF baseBottom(bubbleRect.left(), baseY + halfBase);
+            QPolygonF tail;
+            tail << baseTop << anchorScreen << baseBottom;
+            calloutPath.addPolygon(tail);
         } else if (txt.anchor == CalloutAnchor::Right) {
-            const double halfBase = 8.0;
-            QPointF baseTop(bubbleRect.right(), bubbleRect.center().y() - halfBase);
-            QPointF baseBottom(bubbleRect.right(), bubbleRect.center().y() + halfBase);
-            calloutPath.moveTo(baseTop);
-            calloutPath.lineTo(anchorScreen);
-            calloutPath.lineTo(baseBottom);
-            calloutPath.closeSubpath();
+            double baseY = std::clamp(anchorScreen.y(), bubbleRect.top() + radius, bubbleRect.bottom() - radius);
+            QPointF baseTop(bubbleRect.right(), baseY - halfBase);
+            QPointF baseBottom(bubbleRect.right(), baseY + halfBase);
+            QPolygonF tail;
+            tail << baseTop << anchorScreen << baseBottom;
+            calloutPath.addPolygon(tail);
         }
         // Wypełnij tło dymka określonym kolorem tła z kanałem alfa
         p.setPen(Qt::NoPen);
         p.fillPath(calloutPath, txt.bgColor);
         // Narysuj obramowanie dymka w kolorze borderColor
         QPen bubblePen(txt.borderColor);
+        bubblePen.setWidthF(1.2);
         bubblePen.setCosmetic(true);
         p.setPen(bubblePen);
         p.drawPath(calloutPath);

@@ -18,7 +18,6 @@
 // QHBoxLayout, QLabel, QPushButton, QSpinBox, QColorDialog czy QMessageBox,
 // co prowadziło do błędów kompilacji.
 #include <QHBoxLayout>
-#include <QVBoxLayout>
 #include <QLabel>
 #include <QPushButton>
 #include <QSpinBox>
@@ -29,10 +28,10 @@
 #include <QLineEdit>
 #include <QCheckBox>
 #include <QInputDialog>
+#include <QFontComboBox>
 // Dodane do obsługi rozwijanych list i wariantów
 #include <QComboBox>
 #include <QVariant>
-#include <QSizePolicy>
 // std::abs używany do porównywania wartości double
 #include <cmath>
 // Potrzebne dodatkowe nagłówki dla widżetów i dialogów używanych w dolnym panelu
@@ -300,27 +299,19 @@ void MainWindow::showSelectControls() {
 // kliknięciu Anuluj tryb wstawiania kończy się.
 void MainWindow::showInsertTextControls() {
     QWidget* panel = new QWidget;
-    QVBoxLayout* lay = new QVBoxLayout(panel);
+    QHBoxLayout* lay = new QHBoxLayout(panel);
     lay->setContentsMargins(4,2,4,2);
     lay->setSpacing(8);
-    // Instrukcja
-    auto info = new QLabel(QString::fromUtf8("Kliknij na płótnie, aby określić pozycję strzałki. Następnie wpisz tekst w dymku i przeciągaj dymek lub strzałkę."), panel);
-    lay->addWidget(info);
-    info->setWordWrap(true);
-    info->setAlignment(Qt::AlignLeft | Qt::AlignTop);
-    info->setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Minimum);
-    auto controls = new QHBoxLayout;
-    controls->setSpacing(8);
     // Kolor tekstu
     auto colorLbl = new QLabel(QString::fromUtf8("Kolor tekstu:"), panel);
-    controls->addWidget(colorLbl);
+    lay->addWidget(colorLbl);
     auto colorBtn = new QPushButton(panel);
     auto updateColorBtn = [colorBtn](const QColor& c) {
         colorBtn->setStyleSheet(QString("background-color: %1").arg(c.name()));
         colorBtn->setText(c.name());
     };
     updateColorBtn(m_canvas->insertTextColor());
-    controls->addWidget(colorBtn);
+    lay->addWidget(colorBtn);
     connect(colorBtn, &QPushButton::clicked, this, [this, updateColorBtn]() {
         QColor chosen = QColorDialog::getColor(m_canvas->insertTextColor(), this, QString::fromUtf8("Wybierz kolor tekstu"));
         if (chosen.isValid()) {
@@ -330,14 +321,14 @@ void MainWindow::showInsertTextControls() {
     });
     // Kolor tła dymka
     auto bgLbl = new QLabel(QString::fromUtf8("Tło dymka:"), panel);
-    controls->addWidget(bgLbl);
+    lay->addWidget(bgLbl);
     auto bgBtn = new QPushButton(panel);
     auto updateBgBtn = [bgBtn](const QColor& c) {
         bgBtn->setStyleSheet(QString("background-color: %1").arg(c.name()));
         bgBtn->setText(c.name());
     };
     updateBgBtn(m_canvas->insertTextBgColor());
-    controls->addWidget(bgBtn);
+    lay->addWidget(bgBtn);
     connect(bgBtn, &QPushButton::clicked, this, [this, updateBgBtn]() {
         QColor chosen = QColorDialog::getColor(m_canvas->insertTextBgColor(), this, QString::fromUtf8("Wybierz kolor tła dymka"));
         if (chosen.isValid()) {
@@ -347,14 +338,14 @@ void MainWindow::showInsertTextControls() {
     });
     // Kolor obramowania dymka
     auto borderLbl = new QLabel(QString::fromUtf8("Obramowanie:"), panel);
-    controls->addWidget(borderLbl);
+    lay->addWidget(borderLbl);
     auto borderBtn = new QPushButton(panel);
     auto updateBorderBtn = [borderBtn](const QColor& c) {
         borderBtn->setStyleSheet(QString("background-color: %1").arg(c.name()));
         borderBtn->setText(c.name());
     };
     updateBorderBtn(m_canvas->insertTextBorderColor());
-    controls->addWidget(borderBtn);
+    lay->addWidget(borderBtn);
     connect(borderBtn, &QPushButton::clicked, this, [this, updateBorderBtn]() {
         QColor chosen = QColorDialog::getColor(m_canvas->insertTextBorderColor(), this, QString::fromUtf8("Wybierz kolor obramowania"));
         if (chosen.isValid()) {
@@ -362,51 +353,40 @@ void MainWindow::showInsertTextControls() {
             updateBorderBtn(chosen);
         }
     });
-    // Kierunek strzałki
-    auto anchorLbl = new QLabel(QString::fromUtf8("Strzałka:"), panel);
-    controls->addWidget(anchorLbl);
-    auto anchorCombo = new QComboBox(panel);
-    anchorCombo->addItem(QString::fromUtf8("Dół"), QVariant::fromValue((int)CalloutAnchor::Bottom));
-    anchorCombo->addItem(QString::fromUtf8("Góra"), QVariant::fromValue((int)CalloutAnchor::Top));
-    anchorCombo->addItem(QString::fromUtf8("Lewo"), QVariant::fromValue((int)CalloutAnchor::Left));
-    anchorCombo->addItem(QString::fromUtf8("Prawo"), QVariant::fromValue((int)CalloutAnchor::Right));
-    // Ustaw aktualny anchor
-    int curAnchor = (int)m_canvas->insertTextAnchor();
-    for (int i = 0; i < anchorCombo->count(); ++i) {
-        if (anchorCombo->itemData(i).toInt() == curAnchor) {
-            anchorCombo->setCurrentIndex(i);
-            break;
-        }
-    }
-    controls->addWidget(anchorCombo);
-    connect(anchorCombo, QOverload<int>::of(&QComboBox::currentIndexChanged), this, [this, anchorCombo]() {
-        CalloutAnchor a = static_cast<CalloutAnchor>(anchorCombo->currentData().toInt());
-        m_canvas->setInsertTextAnchor(a);
-    });
+    // Rodzaj czcionki
+    auto fontLbl = new QLabel(QString::fromUtf8("Czcionka:"), panel);
+    lay->addWidget(fontLbl);
+    auto fontCombo = new QFontComboBox(panel);
+    fontCombo->setCurrentFont(m_canvas->insertTextFont());
+    lay->addWidget(fontCombo);
     // Rozmiar czcionki
     auto sizeLbl = new QLabel(QString::fromUtf8("Rozmiar:"), panel);
-    controls->addWidget(sizeLbl);
+    lay->addWidget(sizeLbl);
     auto sizeSpin = new QSpinBox(panel);
     sizeSpin->setRange(6, 48);
-    sizeSpin->setValue(m_canvas->insertTextFont().pointSize() > 0 ? m_canvas->insertTextFont().pointSize() : 12);
-    controls->addWidget(sizeSpin);
+    const QFont baseFont = m_canvas->insertTextFont();
+    sizeSpin->setValue(baseFont.pointSize() > 0 ? baseFont.pointSize() : 12);
+    lay->addWidget(sizeSpin);
     // Styl czcionki (pogrubienie, kursywa, podkreślenie)
     auto boldCheck = new QCheckBox(QString::fromUtf8("B"), panel);
     boldCheck->setToolTip(QString::fromUtf8("Pogrubienie"));
-    controls->addWidget(boldCheck);
+    boldCheck->setChecked(baseFont.bold());
+    lay->addWidget(boldCheck);
     auto italicCheck = new QCheckBox(QString::fromUtf8("I"), panel);
     italicCheck->setToolTip(QString::fromUtf8("Kursywa"));
-    controls->addWidget(italicCheck);
+    italicCheck->setChecked(baseFont.italic());
+    lay->addWidget(italicCheck);
     auto underlineCheck = new QCheckBox(QString::fromUtf8("U"), panel);
     underlineCheck->setToolTip(QString::fromUtf8("Podkreślenie"));
-    controls->addWidget(underlineCheck);
-    controls->addStretch();
+    underlineCheck->setChecked(baseFont.underline());
+    lay->addWidget(underlineCheck);
+    lay->addStretch();
     // Potwierdź
     auto confirmBtn = new QPushButton(QString::fromUtf8("Potwierdź"), panel);
-    controls->addWidget(confirmBtn);
-    connect(confirmBtn, &QPushButton::clicked, this, [this, sizeSpin, boldCheck, italicCheck, underlineCheck]() {
+    lay->addWidget(confirmBtn);
+    connect(confirmBtn, &QPushButton::clicked, this, [this, fontCombo, sizeSpin, boldCheck, italicCheck, underlineCheck]() {
         // Ustaw czcionkę dla nowego dymka
-        QFont font;
+        QFont font = fontCombo->currentFont();
         font.setPointSize(sizeSpin->value());
         font.setBold(boldCheck->isChecked());
         font.setItalic(italicCheck->isChecked());
@@ -417,15 +397,14 @@ void MainWindow::showInsertTextControls() {
         // Ukryj panel
         m_settingsDock->setSettingsWidget(nullptr);
     });
-    // Anuluj
-    auto cancelBtn = new QPushButton(QString::fromUtf8("Anuluj"), panel);
-    controls->addWidget(cancelBtn);
+    // Usuń
+    auto cancelBtn = new QPushButton(QString::fromUtf8("Usuń"), panel);
+    lay->addWidget(cancelBtn);
     connect(cancelBtn, &QPushButton::clicked, this, [this]() {
         // Anuluj wstawianie lub edycję
         m_canvas->cancelTextEdit();
         m_settingsDock->setSettingsWidget(nullptr);
     });
-    lay->addLayout(controls);
     panel->setLayout(lay);
     m_settingsDock->setSettingsWidget(panel);
 }
