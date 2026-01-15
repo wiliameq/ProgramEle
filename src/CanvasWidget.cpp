@@ -20,9 +20,29 @@
 #include <QtPdf/QPdfDocument>
 #include <QSize>
 #include <QImage>
-#include <QLineEdit>
+#include <QTextEdit>
 #include <QFontMetrics>
 #include <QPolygonF>
+
+namespace {
+CanvasWidget::ResizeHandle hitResizeHandle(const QRectF &rect, const QPointF &pos, double threshold) {
+    struct HandlePoint { CanvasWidget::ResizeHandle handle; QPointF point; };
+    const HandlePoint points[] = {
+        {CanvasWidget::ResizeHandle::TopLeft, rect.topLeft()},
+        {CanvasWidget::ResizeHandle::TopRight, rect.topRight()},
+        {CanvasWidget::ResizeHandle::BottomLeft, rect.bottomLeft()},
+        {CanvasWidget::ResizeHandle::BottomRight, rect.bottomRight()},
+    };
+    for (const auto &hp : points) {
+        const double dx = pos.x() - hp.point.x();
+        const double dy = pos.y() - hp.point.y();
+        if (std::hypot(dx, dy) <= threshold) {
+            return hp.handle;
+        }
+    }
+    return CanvasWidget::ResizeHandle::None;
+}
+} // namespace
 
 CanvasWidget::CanvasWidget(QWidget* parent, ProjectSettings* settings)
     : QWidget(parent), m_settings(settings) {
@@ -310,35 +330,23 @@ void CanvasWidget::updateSelectedText(const QString &text, const QColor &color, 
     ti.font = font;
     // Aktualizuj boundingRect na podstawie nowego tekstu i czcionki
     QFontMetrics fm(font);
-    int textW = fm.horizontalAdvance(trimmed);
-    int textH = fm.height();
-    double w_m = textW / (m_pixelsPerMeter * m_zoom);
-    double h_m = textH / (m_pixelsPerMeter * m_zoom);
-    // Zachowaj pozycję i uwzględnij orientację dymka przy wyznaczaniu boundingRect.
-    // Pozycja ti.pos wskazuje punkt zaczepienia strzałki.  W zależności od
-    // ti.anchor obliczamy położenie prostokąta tak, aby strzałka była
-    // skierowana we właściwą stronę.  Dla Bottom prostokąt znajduje się
-    // nad pos, dla Top – poniżej pos, dla Left – po prawej od pos,
-    // dla Right – po lewej od pos.  Prostokąt jest wycentrowany względem
-    // pos w osi prostopadłej do kierunku strzałki.
-    double x_m, y_m;
-    switch (ti.anchor) {
-    case CalloutAnchor::Bottom:
+    double widthPx = ti.boundingRect.width() * m_pixelsPerMeter * m_zoom;
+    if (widthPx <= 0.0) {
+        widthPx = fm.horizontalAdvance(trimmed);
+    }
+    QRect textBounds = fm.boundingRect(0, 0, (int)std::ceil(widthPx), 10000,
+                                       Qt::TextWordWrap, trimmed);
+    double w_m = 0.0;
+    double h_m = 0.0;
+    if (m_pixelsPerMeter * m_zoom != 0.0) {
+        w_m = textBounds.width() / (m_pixelsPerMeter * m_zoom);
+        h_m = textBounds.height() / (m_pixelsPerMeter * m_zoom);
+    }
+    double x_m = ti.boundingRect.left();
+    double y_m = ti.boundingRect.top();
+    if (ti.boundingRect.isNull()) {
         x_m = ti.pos.x() - w_m / 2.0;
         y_m = ti.pos.y() - h_m;
-        break;
-    case CalloutAnchor::Top:
-        x_m = ti.pos.x() - w_m / 2.0;
-        y_m = ti.pos.y();
-        break;
-    case CalloutAnchor::Left:
-        x_m = ti.pos.x();
-        y_m = ti.pos.y() - h_m / 2.0;
-        break;
-    case CalloutAnchor::Right:
-        x_m = ti.pos.x() - w_m;
-        y_m = ti.pos.y() - h_m / 2.0;
-        break;
     }
     ti.boundingRect = QRectF(x_m, y_m, w_m, h_m);
     update();
@@ -409,8 +417,10 @@ void CanvasWidget::startEditExistingText(int index) {
     // Wyciągnij istniejący element
     TextItem &ti = m_textItems[index];
     // Utwórz pole edycyjne nad tekstem
-    m_textEdit = new QLineEdit(this);
-    m_textEdit->setFrame(false);
+    m_textEdit = new QTextEdit(this);
+    m_textEdit->setFrameStyle(QFrame::NoFrame);
+    m_textEdit->setAcceptRichText(false);
+    m_textEdit->installEventFilter(this);
     // Ustaw kolor tekstu i czcionkę zgodnie z istniejącym elementem
     QPalette pal = m_textEdit->palette();
     pal.setColor(QPalette::Text, ti.color);
@@ -418,56 +428,40 @@ void CanvasWidget::startEditExistingText(int index) {
     m_textEdit->setStyleSheet(QString("color: %1;").arg(ti.color.name()));
     m_textEdit->setFont(ti.font);
     // Ustaw istniejący tekst
-    m_textEdit->setText(ti.text);
+    m_textEdit->setPlainText(ti.text);
     // Oblicz pozycję na ekranie na podstawie boundingRect górnego lewego rogu
     QPointF topLeftScreen = toScreen(ti.boundingRect.topLeft());
-    // Oblicz wymiary pola na podstawie tekstu i czcionki
-    QFontMetrics fm(ti.font);
-    QString disp = ti.text.isEmpty() ? QStringLiteral(" ") : ti.text;
-    int textW = fm.horizontalAdvance(disp);
-    int textH = fm.height();
-    int width = textW + 4;
-    int height = textH;
+    QSizeF sizePx(ti.boundingRect.width() * m_pixelsPerMeter * m_zoom,
+                  ti.boundingRect.height() * m_pixelsPerMeter * m_zoom);
+    int width = std::max(40, (int)std::round(sizePx.width()));
+    int height = std::max(20, (int)std::round(sizePx.height()));
     m_textEdit->move(topLeftScreen.toPoint());
     m_textEdit->resize(width, height);
     m_textEdit->show();
     m_textEdit->setFocus();
     // Podczas edycji aktualizuj boundingRect w czasie rzeczywistym
-    connect(m_textEdit, &QLineEdit::textChanged, this, [this, index](const QString &txt){
+    connect(m_textEdit, &QTextEdit::textChanged, this, [this, index](){
         if (index < 0 || index >= (int)m_textItems.size()) return;
         TextItem &t = m_textItems[index];
-        t.text = txt;
-        // Oblicz wymiary tekstu
-        QFontMetrics fm2(t.font);
-        QString disp2 = t.text.isEmpty() ? QStringLiteral(" ") : t.text;
-        int textW2 = fm2.horizontalAdvance(disp2);
-        int textH2 = fm2.height();
-        double w_m = textW2 / (m_pixelsPerMeter * m_zoom);
-        double h_m = textH2 / (m_pixelsPerMeter * m_zoom);
-        double x_m, y_m;
-        switch (t.anchor) {
-        case CalloutAnchor::Bottom:
+        t.text = m_textEdit ? m_textEdit->toPlainText() : t.text;
+        QSizeF docSize = m_textEdit ? m_textEdit->document()->size() : QSizeF();
+        double w_m = 0.0;
+        double h_m = 0.0;
+        if (m_pixelsPerMeter * m_zoom != 0.0) {
+            w_m = docSize.width() / (m_pixelsPerMeter * m_zoom);
+            h_m = docSize.height() / (m_pixelsPerMeter * m_zoom);
+        }
+        double x_m = t.boundingRect.left();
+        double y_m = t.boundingRect.top();
+        if (t.boundingRect.isNull()) {
             x_m = t.pos.x() - w_m / 2.0;
             y_m = t.pos.y() - h_m;
-            break;
-        case CalloutAnchor::Top:
-            x_m = t.pos.x() - w_m / 2.0;
-            y_m = t.pos.y();
-            break;
-        case CalloutAnchor::Left:
-            x_m = t.pos.x();
-            y_m = t.pos.y() - h_m / 2.0;
-            break;
-        case CalloutAnchor::Right:
-            x_m = t.pos.x() - w_m;
-            y_m = t.pos.y() - h_m / 2.0;
-            break;
         }
         t.boundingRect = QRectF(x_m, y_m, w_m, h_m);
         // Przenieś pole edycyjne do nowej pozycji i rozmiaru
         QPointF tl = toScreen(t.boundingRect.topLeft());
-        int width2 = textW2 + 4;
-        int height2 = textH2;
+        int width2 = std::max(40, (int)std::round(docSize.width()));
+        int height2 = std::max(20, (int)std::round(docSize.height()));
         if (m_textEdit) {
             m_textEdit->move(tl.toPoint());
             m_textEdit->resize(width2, height2);
@@ -807,7 +801,7 @@ void CanvasWidget::drawMeasures(QPainter& p) {
         // Wypisz tekst wewnątrz dymka z odpowiednim marginesem w kolorze tekstu
         QRectF textRect = bubbleRect.adjusted(4, 2, -4, -2);
         p.setPen(txt.color);
-        p.drawText(textRect, Qt::AlignLeft | Qt::AlignVCenter | Qt::TextWordWrap, txt.text);
+        p.drawText(textRect, Qt::AlignLeft | Qt::AlignTop | Qt::TextWordWrap, txt.text);
         // Jeśli element jest zaznaczony, narysuj czerwone przerywane obramowanie wokół dymka
         if ((int)ti == m_selectedTextIndex) {
             QPen selPen(QColor(255,0,0));
@@ -816,8 +810,95 @@ void CanvasWidget::drawMeasures(QPainter& p) {
             selPen.setCosmetic(true);
             p.setPen(selPen);
             p.drawPath(calloutPath);
+            // Uchwytowe kropki na rogach i kotwicy
+            QPen handlePen(Qt::black);
+            handlePen.setCosmetic(true);
+            p.setPen(handlePen);
+            p.setBrush(Qt::white);
+            const double handleRadius = 4.0;
+            p.drawEllipse(bubbleRect.topLeft(), handleRadius, handleRadius);
+            p.drawEllipse(bubbleRect.topRight(), handleRadius, handleRadius);
+            p.drawEllipse(bubbleRect.bottomLeft(), handleRadius, handleRadius);
+            p.drawEllipse(bubbleRect.bottomRight(), handleRadius, handleRadius);
+            p.drawEllipse(anchorScreen, handleRadius, handleRadius);
         }
         // Przywróć stan
+        p.setFont(oldFont);
+        p.setPen(oldPen);
+    }
+    // Narysuj tymczasowy dymek podczas wstawiania
+    if (m_mode == ToolMode::InsertText && m_hasTempTextItem) {
+        const auto &txt = m_tempTextItem;
+        // Przelicz górny lewy narożnik oraz rozmiar prostokąta tekstu w pikselach
+        QPointF topLeftScreen = toScreen(txt.boundingRect.topLeft());
+        QSizeF sizePx(txt.boundingRect.width() * m_pixelsPerMeter * m_zoom,
+                      txt.boundingRect.height() * m_pixelsPerMeter * m_zoom);
+        QRectF textBox(topLeftScreen, sizePx);
+        // Wyznacz anchor strzałki w pikselach
+        QPointF anchorScreen = toScreen(txt.pos);
+        // Przygotuj prostokąt dymka: powiększ go o margines.
+        const double marginX = 8.0;
+        const double marginY = 6.0;
+        QRectF bubbleRect = textBox.adjusted(-marginX, -marginY, marginX, marginY);
+        QFont oldFont = p.font();
+        QPen oldPen = p.pen();
+        if (txt.font != QFont()) {
+            p.setFont(txt.font);
+        }
+        QPainterPath calloutPath;
+        const double radius = 8.0;
+        calloutPath.addRoundedRect(bubbleRect, radius, radius);
+        const double halfBase = 9.0;
+        if (txt.anchor == CalloutAnchor::Bottom) {
+            double baseX = std::clamp(anchorScreen.x(), bubbleRect.left() + radius, bubbleRect.right() - radius);
+            QPointF baseLeft(baseX - halfBase, bubbleRect.bottom());
+            QPointF baseRight(baseX + halfBase, bubbleRect.bottom());
+            QPolygonF tail;
+            tail << baseLeft << anchorScreen << baseRight;
+            calloutPath.addPolygon(tail);
+        } else if (txt.anchor == CalloutAnchor::Top) {
+            double baseX = std::clamp(anchorScreen.x(), bubbleRect.left() + radius, bubbleRect.right() - radius);
+            QPointF baseLeft(baseX - halfBase, bubbleRect.top());
+            QPointF baseRight(baseX + halfBase, bubbleRect.top());
+            QPolygonF tail;
+            tail << baseLeft << anchorScreen << baseRight;
+            calloutPath.addPolygon(tail);
+        } else if (txt.anchor == CalloutAnchor::Left) {
+            double baseY = std::clamp(anchorScreen.y(), bubbleRect.top() + radius, bubbleRect.bottom() - radius);
+            QPointF baseTop(bubbleRect.left(), baseY - halfBase);
+            QPointF baseBottom(bubbleRect.left(), baseY + halfBase);
+            QPolygonF tail;
+            tail << baseTop << anchorScreen << baseBottom;
+            calloutPath.addPolygon(tail);
+        } else if (txt.anchor == CalloutAnchor::Right) {
+            double baseY = std::clamp(anchorScreen.y(), bubbleRect.top() + radius, bubbleRect.bottom() - radius);
+            QPointF baseTop(bubbleRect.right(), baseY - halfBase);
+            QPointF baseBottom(bubbleRect.right(), baseY + halfBase);
+            QPolygonF tail;
+            tail << baseTop << anchorScreen << baseBottom;
+            calloutPath.addPolygon(tail);
+        }
+        p.setPen(Qt::NoPen);
+        p.fillPath(calloutPath, txt.bgColor);
+        QPen bubblePen(txt.borderColor);
+        bubblePen.setWidthF(1.2);
+        bubblePen.setCosmetic(true);
+        p.setPen(bubblePen);
+        p.drawPath(calloutPath);
+        QRectF textRect = bubbleRect.adjusted(4, 2, -4, -2);
+        p.setPen(txt.color);
+        p.drawText(textRect, Qt::AlignLeft | Qt::AlignTop | Qt::TextWordWrap, txt.text);
+        // Uchwytowe kropki na rogach i kotwicy
+        QPen handlePen(Qt::black);
+        handlePen.setCosmetic(true);
+        p.setPen(handlePen);
+        p.setBrush(Qt::white);
+        const double handleRadius = 4.0;
+        p.drawEllipse(bubbleRect.topLeft(), handleRadius, handleRadius);
+        p.drawEllipse(bubbleRect.topRight(), handleRadius, handleRadius);
+        p.drawEllipse(bubbleRect.bottomLeft(), handleRadius, handleRadius);
+        p.drawEllipse(bubbleRect.bottomRight(), handleRadius, handleRadius);
+        p.drawEllipse(anchorScreen, handleRadius, handleRadius);
         p.setFont(oldFont);
         p.setPen(oldPen);
     }
@@ -859,6 +940,23 @@ void CanvasWidget::drawOverlay(QPainter& p) {
 
 void CanvasWidget::mousePressEvent(QMouseEvent* ev) {
     if (ev->button() == Qt::RightButton) {
+        QPointF pos = toWorld(ev->localPos());
+        if (m_mode == ToolMode::Select) {
+            double marginWorldX = 0.0;
+            double marginWorldY = 0.0;
+            if (m_pixelsPerMeter * m_zoom != 0.0) {
+                marginWorldX = 8.0 / (m_pixelsPerMeter * m_zoom);
+                marginWorldY = 6.0 / (m_pixelsPerMeter * m_zoom);
+            }
+            for (int i = 0; i < (int)m_textItems.size(); ++i) {
+                const auto &ti = m_textItems[i];
+                QRectF hitRect = ti.boundingRect.adjusted(-marginWorldX, -marginWorldY, marginWorldX, marginWorldY);
+                if (hitRect.contains(pos)) {
+                    startEditExistingText(i);
+                    return;
+                }
+            }
+        }
         m_isPanning = true; m_lastMouseScreen = ev->position(); return;
     }
     QPointF pos = toWorld(ev->localPos());
@@ -904,6 +1002,28 @@ void CanvasWidget::mousePressEvent(QMouseEvent* ev) {
             m_selectedMeasureIndex = -1;
             m_isDraggingSelectedAnchor = true;
             m_isDraggingSelectedText = false;
+            update();
+            return;
+        }
+        // Sprawdź, czy kliknięto w uchwyt rozmiaru któregoś dymka
+        int resizeIdx = -1;
+        ResizeHandle handle = ResizeHandle::None;
+        double handleThreshold = 8.0 / (m_pixelsPerMeter * m_zoom);
+        for (int i = 0; i < (int)m_textItems.size(); ++i) {
+            const auto &ti = m_textItems[i];
+            handle = hitResizeHandle(ti.boundingRect, wpos, handleThreshold);
+            if (handle != ResizeHandle::None) {
+                resizeIdx = i;
+                break;
+            }
+        }
+        if (resizeIdx >= 0) {
+            m_selectedTextIndex = resizeIdx;
+            m_selectedMeasureIndex = -1;
+            m_resizeHandle = handle;
+            m_isResizingSelectedBubble = true;
+            m_resizeStartRect = m_textItems[resizeIdx].boundingRect;
+            m_resizeStartPos = wpos;
             update();
             return;
         }
@@ -980,6 +1100,16 @@ void CanvasWidget::mousePressEvent(QMouseEvent* ev) {
         QPointF wpos = pos;
         // Jeżeli tymczasowy dymek jest już aktywny
         if (m_hasTempTextItem) {
+            // Sprawdź, czy kliknięto w uchwyt rozmiaru dymka
+            double handleThreshold = 8.0 / (m_pixelsPerMeter * m_zoom);
+            ResizeHandle handle = hitResizeHandle(m_tempTextItem.boundingRect, wpos, handleThreshold);
+            if (handle != ResizeHandle::None) {
+                m_resizeHandle = handle;
+                m_isResizingTempBubble = true;
+                m_resizeStartRect = m_tempTextItem.boundingRect;
+                m_resizeStartPos = wpos;
+                return;
+            }
             // Sprawdź, czy kliknięcie znajduje się w pobliżu kotwicy
             double threshold = 8.0 / (m_pixelsPerMeter * m_zoom);
             double dx = wpos.x() - m_tempTextItem.pos.x();
@@ -1012,7 +1142,7 @@ void CanvasWidget::mousePressEvent(QMouseEvent* ev) {
         }
         // Jeśli tymczasowy dymek jeszcze nie istnieje, to klik
         // ustawia pozycję kotwicy i rozpoczyna edycję.  Utwórz
-        // m_tempTextItem i pole QLineEdit.
+        // m_tempTextItem i pole QTextEdit.
         m_hasTempTextItem = true;
         m_tempTextItem.pos = wpos;
         m_tempTextItem.text.clear();
@@ -1039,23 +1169,25 @@ void CanvasWidget::mousePressEvent(QMouseEvent* ev) {
             // Nie powinno mieć miejsca, ale dla pewności usuń stare pole
             cancelTextEdit();
         }
-        m_textEdit = new QLineEdit(this);
-        m_textEdit->setFrame(false);
+        m_textEdit = new QTextEdit(this);
+        m_textEdit->setFrameStyle(QFrame::NoFrame);
+        m_textEdit->setAcceptRichText(false);
+        m_textEdit->installEventFilter(this);
         // Ustaw kolor i czcionkę dla edycji
         QPalette pal = m_textEdit->palette();
         pal.setColor(QPalette::Text, m_tempTextItem.color);
         m_textEdit->setPalette(pal);
         m_textEdit->setStyleSheet(QString("color: %1;").arg(m_tempTextItem.color.name()));
         m_textEdit->setFont(m_tempTextItem.font);
-        m_textEdit->setText(QString());
+        m_textEdit->setPlainText(QString());
         // Dopasuj rozmiar pola do tekstu i ustaw je w odpowiedniej pozycji
         repositionTempTextEdit();
         m_textEdit->show();
         m_textEdit->setFocus();
         // Po każdej zmianie tekstu aktualizuj boundingRect i dymek
-        connect(m_textEdit, &QLineEdit::textChanged, this, [this](const QString &txt){
+        connect(m_textEdit, &QTextEdit::textChanged, this, [this](){
             if (m_hasTempTextItem) {
-                m_tempTextItem.text = txt;
+                m_tempTextItem.text = m_textEdit ? m_textEdit->toPlainText() : m_tempTextItem.text;
                 updateTempBoundingRect();
                 repositionTempTextEdit();
                 update();
@@ -1116,11 +1248,94 @@ void CanvasWidget::mousePressEvent(QMouseEvent* ev) {
     QWidget::mousePressEvent(ev);
 }
 
+void CanvasWidget::mouseDoubleClickEvent(QMouseEvent* ev) {
+    if (ev->button() != Qt::LeftButton) {
+        QWidget::mouseDoubleClickEvent(ev);
+        return;
+    }
+    if (m_mode == ToolMode::Select) {
+        QPointF wpos = toWorld(ev->localPos());
+        double marginWorldX = 0.0;
+        double marginWorldY = 0.0;
+        if (m_pixelsPerMeter * m_zoom != 0.0) {
+            marginWorldX = 8.0 / (m_pixelsPerMeter * m_zoom);
+            marginWorldY = 6.0 / (m_pixelsPerMeter * m_zoom);
+        }
+        for (int i = 0; i < (int)m_textItems.size(); ++i) {
+            const auto &ti = m_textItems[i];
+            QRectF hitRect = ti.boundingRect.adjusted(-marginWorldX, -marginWorldY, marginWorldX, marginWorldY);
+            if (hitRect.contains(wpos)) {
+                startEditExistingText(i);
+                return;
+            }
+        }
+    }
+    QWidget::mouseDoubleClickEvent(ev);
+}
+
 void CanvasWidget::mouseMoveEvent(QMouseEvent* ev) {
     if (m_isPanning) {
         QPointF now = ev->position();
         m_viewOffset += (now - m_lastMouseScreen);
         m_lastMouseScreen = now;
+        update();
+        return;
+    }
+    if (m_isResizingTempBubble) {
+        QPointF wpos = toWorld(ev->localPos());
+        QRectF rect = m_resizeStartRect;
+        const double minW = 40.0 / (m_pixelsPerMeter * m_zoom);
+        const double minH = 20.0 / (m_pixelsPerMeter * m_zoom);
+        switch (m_resizeHandle) {
+        case ResizeHandle::TopLeft:
+            rect.setTopLeft(wpos);
+            break;
+        case ResizeHandle::TopRight:
+            rect.setTopRight(wpos);
+            break;
+        case ResizeHandle::BottomLeft:
+            rect.setBottomLeft(wpos);
+            break;
+        case ResizeHandle::BottomRight:
+            rect.setBottomRight(wpos);
+            break;
+        default:
+            break;
+        }
+        rect = rect.normalized();
+        if (rect.width() < minW) rect.setWidth(minW);
+        if (rect.height() < minH) rect.setHeight(minH);
+        m_tempTextItem.boundingRect = rect;
+        m_isTempBubblePinned = true;
+        repositionTempTextEdit();
+        update();
+        return;
+    }
+    if (m_isResizingSelectedBubble && hasSelectedText()) {
+        QPointF wpos = toWorld(ev->localPos());
+        QRectF rect = m_resizeStartRect;
+        const double minW = 40.0 / (m_pixelsPerMeter * m_zoom);
+        const double minH = 20.0 / (m_pixelsPerMeter * m_zoom);
+        switch (m_resizeHandle) {
+        case ResizeHandle::TopLeft:
+            rect.setTopLeft(wpos);
+            break;
+        case ResizeHandle::TopRight:
+            rect.setTopRight(wpos);
+            break;
+        case ResizeHandle::BottomLeft:
+            rect.setBottomLeft(wpos);
+            break;
+        case ResizeHandle::BottomRight:
+            rect.setBottomRight(wpos);
+            break;
+        default:
+            break;
+        }
+        rect = rect.normalized();
+        if (rect.width() < minW) rect.setWidth(minW);
+        if (rect.height() < minH) rect.setHeight(minH);
+        m_textItems[m_selectedTextIndex].boundingRect = rect;
         update();
         return;
     }
@@ -1191,6 +1406,9 @@ void CanvasWidget::mouseReleaseEvent(QMouseEvent* ev) {
                 m_isDraggingSelectedAnchor = false;
             }
         }
+        m_isResizingTempBubble = false;
+        m_isResizingSelectedBubble = false;
+        m_resizeHandle = ResizeHandle::None;
     }
     QWidget::mouseReleaseEvent(ev);
 }
@@ -1216,8 +1434,9 @@ void CanvasWidget::startTextEdit(const QPointF &worldPos, const QPointF &screenP
         commitTextEdit();
     }
     // Utwórz nowe pole edycyjne
-    m_textEdit = new QLineEdit(this);
-    m_textEdit->setFrame(false);
+    m_textEdit = new QTextEdit(this);
+    m_textEdit->setFrameStyle(QFrame::NoFrame);
+    m_textEdit->setAcceptRichText(false);
     // Zastosuj kolor tekstu poprzez paletę i CSS (CSS zapewnia bardziej
     // niezawodne ustawienie koloru w niektórych motywach)
     QPalette pal = m_textEdit->palette();
@@ -1227,12 +1446,12 @@ void CanvasWidget::startTextEdit(const QPointF &worldPos, const QPointF &screenP
     // Ustaw czcionkę
     m_textEdit->setFont(m_insertTextFont);
     // Pusty tekst początkowy
-    m_textEdit->setText(QString());
+    m_textEdit->setPlainText(QString());
     // Ustaw pozycję na ekranie (współrzędne lokalne)
     QPoint pt = screenPos.toPoint();
     m_textEdit->move(pt);
     // Ustaw minimalny rozmiar, aby pole było widoczne
-    m_textEdit->resize(100, 20);
+    m_textEdit->resize(120, 40);
     m_textEdit->show();
     m_textEdit->setFocus();
     // Zapisz pozycję świata i wyczyść wskaźniki
@@ -1248,8 +1467,9 @@ void CanvasWidget::commitTextEdit() {
         return;
     }
     // Pobierz tekst i kolor czcionki z pola
-    QString text = m_textEdit->text().trimmed();
-    QLineEdit* edit = m_textEdit;
+    QString text = m_textEdit->toPlainText().trimmed();
+    QSizeF docSize = m_textEdit->document()->size();
+    QTextEdit* edit = m_textEdit;
     m_textEdit = nullptr;
     edit->deleteLater();
     // Jeżeli wstawiany jest tymczasowy dymek (m_hasTempTextItem), to
@@ -1273,31 +1493,17 @@ void CanvasWidget::commitTextEdit() {
             ti.text = text;
             // Kolor i czcionka nie są zmieniane tutaj – użytkownik
             // ustawia je z panelu poprzez setSelectedTextColor/Font.
-            // Oblicz nowy boundingRect na podstawie anchor
-            QFontMetrics fm(ti.font);
-            QString disp = ti.text.isEmpty() ? QStringLiteral(" ") : ti.text;
-            int textW = fm.horizontalAdvance(disp);
-            int textH = fm.height();
-            double w_m = textW / (m_pixelsPerMeter * m_zoom);
-            double h_m = textH / (m_pixelsPerMeter * m_zoom);
-            double x_m, y_m;
-            switch (ti.anchor) {
-            case CalloutAnchor::Bottom:
+            double w_m = 0.0;
+            double h_m = 0.0;
+            if (m_pixelsPerMeter * m_zoom != 0.0) {
+                w_m = docSize.width() / (m_pixelsPerMeter * m_zoom);
+                h_m = docSize.height() / (m_pixelsPerMeter * m_zoom);
+            }
+            double x_m = ti.boundingRect.left();
+            double y_m = ti.boundingRect.top();
+            if (ti.boundingRect.isNull()) {
                 x_m = ti.pos.x() - w_m / 2.0;
                 y_m = ti.pos.y() - h_m;
-                break;
-            case CalloutAnchor::Top:
-                x_m = ti.pos.x() - w_m / 2.0;
-                y_m = ti.pos.y();
-                break;
-            case CalloutAnchor::Left:
-                x_m = ti.pos.x();
-                y_m = ti.pos.y() - h_m / 2.0;
-                break;
-            case CalloutAnchor::Right:
-                x_m = ti.pos.x() - w_m;
-                y_m = ti.pos.y() - h_m / 2.0;
-                break;
             }
             ti.boundingRect = QRectF(x_m, y_m, w_m, h_m);
             // Ustaw zaznaczenie na edytowany element
@@ -1322,19 +1528,27 @@ void CanvasWidget::commitTextEdit() {
 
 void CanvasWidget::updateTempBoundingRect() {
     if (!m_hasTempTextItem) return;
-    // Użyj czcionki i treści z m_tempTextItem.  Jeśli tekst jest pusty,
-    // przyjmij pojedynczy znak spacji dla obliczenia rozmiaru.
-    QString txt = m_tempTextItem.text;
-    if (txt.isEmpty()) txt = QStringLiteral(" ");
-    QFont f = m_tempTextItem.font;
-    QFontMetrics fm(f);
-    int textW = fm.horizontalAdvance(txt);
-    int textH = fm.height();
+    QSizeF docSize;
+    if (m_textEdit) {
+        docSize = m_textEdit->document()->size();
+    } else {
+        // Użyj czcionki i treści z m_tempTextItem.  Jeśli tekst jest pusty,
+        // przyjmij pojedynczy znak spacji dla obliczenia rozmiaru.
+        QString txt = m_tempTextItem.text;
+        if (txt.isEmpty()) txt = QStringLiteral(" ");
+        QFont f = m_tempTextItem.font;
+        QFontMetrics fm(f);
+        docSize = QSizeF(fm.horizontalAdvance(txt), fm.height());
+    }
     double w_m = 0.0;
     double h_m = 0.0;
     if (m_pixelsPerMeter * m_zoom != 0.0) {
-        w_m = textW / (m_pixelsPerMeter * m_zoom);
-        h_m = textH / (m_pixelsPerMeter * m_zoom);
+        w_m = docSize.width() / (m_pixelsPerMeter * m_zoom);
+        h_m = docSize.height() / (m_pixelsPerMeter * m_zoom);
+    }
+    if (m_isTempBubblePinned && !m_tempTextItem.boundingRect.isNull()) {
+        w_m = std::max(w_m, m_tempTextItem.boundingRect.width());
+        h_m = std::max(h_m, m_tempTextItem.boundingRect.height());
     }
     double x_m = m_tempTextItem.boundingRect.left();
     double y_m = m_tempTextItem.boundingRect.top();
@@ -1365,15 +1579,11 @@ void CanvasWidget::repositionTempTextEdit() {
     if (!m_hasTempTextItem || !m_textEdit) return;
     // Oblicz pozycję lewego górnego rogu prostokąta tekstu w ekranie
     QPointF topLeftScreen = toScreen(m_tempTextItem.boundingRect.topLeft());
-    // Oblicz szerokość i wysokość pola na podstawie czcionki i treści
-    QString txt = m_tempTextItem.text;
-    if (txt.isEmpty()) txt = QStringLiteral(" ");
-    QFontMetrics fm(m_tempTextItem.font);
-    int textW = fm.horizontalAdvance(txt);
-    int textH = fm.height();
+    QSizeF sizePx(m_tempTextItem.boundingRect.width() * m_pixelsPerMeter * m_zoom,
+                  m_tempTextItem.boundingRect.height() * m_pixelsPerMeter * m_zoom);
     // Ustaw wymiary z niewielkim marginesem, aby tekst nie był ściśnięty
-    int width = textW + 4;
-    int height = textH;
+    int width = std::max(40, (int)std::round(sizePx.width() + 4));
+    int height = std::max(20, (int)std::round(sizePx.height() + 4));
     // Ustaw pozycję edytora bezpośrednio w lewym górnym rogu boundingRect
     m_textEdit->move(topLeftScreen.toPoint());
     m_textEdit->resize(width, height);
@@ -1383,9 +1593,9 @@ void CanvasWidget::commitTempTextItem() {
     if (!m_hasTempTextItem) return;
     // Usuń pole edycyjne
     if (m_textEdit) {
-        QString txt = m_textEdit->text().trimmed();
-        // Usuń QLineEdit
-        QLineEdit* edit = m_textEdit;
+        QString txt = m_textEdit->toPlainText().trimmed();
+        // Usuń QTextEdit
+        QTextEdit* edit = m_textEdit;
         m_textEdit = nullptr;
         edit->deleteLater();
         // Jeśli tekst jest pusty, anuluj wstawianie
@@ -1417,7 +1627,7 @@ void CanvasWidget::cancelTempTextItem() {
     if (!m_hasTempTextItem) return;
     // Usuń pole edycyjne
     if (m_textEdit) {
-        QLineEdit* edit = m_textEdit;
+        QTextEdit* edit = m_textEdit;
         m_textEdit = nullptr;
         edit->deleteLater();
     }
@@ -1434,7 +1644,7 @@ void CanvasWidget::cancelTempTextItem() {
 void CanvasWidget::cancelTextEdit() {
     // Anuluj edycję bez zapisu
     if (m_textEdit) {
-        QLineEdit* edit = m_textEdit;
+        QTextEdit* edit = m_textEdit;
         m_textEdit = nullptr;
         edit->deleteLater();
     }
@@ -1525,6 +1735,30 @@ void CanvasWidget::keyPressEvent(QKeyEvent* ev) {
             break;
         default: QWidget::keyPressEvent(ev);
     }
+}
+
+bool CanvasWidget::eventFilter(QObject* obj, QEvent* event) {
+    if (obj == m_textEdit && event->type() == QEvent::KeyPress) {
+        auto *keyEv = static_cast<QKeyEvent*>(event);
+        if (keyEv->key() == Qt::Key_Return || keyEv->key() == Qt::Key_Enter) {
+            if (m_hasTempTextItem) {
+                QString txt = m_textEdit->toPlainText().trimmed();
+                m_tempTextItem.text = txt;
+                updateTempBoundingRect();
+                m_isTempBubblePinned = true;
+                QTextEdit* edit = m_textEdit;
+                m_textEdit = nullptr;
+                edit->deleteLater();
+                update();
+                return true;
+            }
+            if (m_editingTextIndex >= 0) {
+                commitTextEdit();
+                return true;
+            }
+        }
+    }
+    return QWidget::eventFilter(obj, event);
 }
 
 void CanvasWidget::defineScalePromptAndApply(const QPointF& secondPoint) {

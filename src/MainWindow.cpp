@@ -25,7 +25,6 @@
 #include <QMessageBox>
 #include <QInputDialog>
 // Nowe widżety wykorzystywane w panelu wstawiania tekstu
-#include <QLineEdit>
 #include <QCheckBox>
 #include <QInputDialog>
 #include <QFontComboBox>

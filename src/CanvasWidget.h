@@ -5,7 +5,7 @@
 #include <QColor>
 #include <QFont>
 #include <QRectF>
-#include <QLineEdit>
+#include <QTextEdit>
 #include <QDateTime>
 #include <vector>
 #include <unordered_map>
@@ -149,10 +149,12 @@ public:
 protected:
     void paintEvent(QPaintEvent*) override;
     void mousePressEvent(QMouseEvent*) override;
+    void mouseDoubleClickEvent(QMouseEvent*) override;
     void mouseMoveEvent(QMouseEvent*) override;
     void mouseReleaseEvent(QMouseEvent*) override;
     void wheelEvent(QWheelEvent*) override;
     void keyPressEvent(QKeyEvent*) override;
+    bool eventFilter(QObject* obj, QEvent* event) override;
 
 private:
     // Settings
@@ -284,10 +286,16 @@ private:
     QColor m_insertBubbleBorderColor = Qt::black;
 
     // --- Edycja tekstu w stylu Paint ---
-    // Wskaźnik do aktywnego pola edycyjnego QLineEdit, które pojawia się
+    // Wskaźnik do aktywnego pola edycyjnego QTextEdit, które pojawia się
     // bezpośrednio na płótnie, gdy użytkownik wstawia lub edytuje tekst.
     // Po zatwierdzeniu lub anulowaniu edycji pole jest usuwane.
-    QLineEdit* m_textEdit = nullptr;
+    QTextEdit* m_textEdit = nullptr;
+    enum class ResizeHandle { None, TopLeft, TopRight, BottomLeft, BottomRight };
+    ResizeHandle m_resizeHandle = ResizeHandle::None;
+    bool m_isResizingTempBubble = false;
+    bool m_isResizingSelectedBubble = false;
+    QRectF m_resizeStartRect;
+    QPointF m_resizeStartPos;
     // Indeks edytowanego tekstu w m_textItems.  Wartość -1 oznacza
     // wstawianie nowego tekstu.
     int m_editingTextIndex = -1;
@@ -652,7 +660,7 @@ public:
     // --- Edycja tekstu w stylu Paint ---
     /**
      * Rozpoczyna edycję tekstu w podanej pozycji świata i ekranu.
-     * Tworzy pole QLineEdit, w którym użytkownik może wpisać treść
+     * Tworzy pole QTextEdit, w którym użytkownik może wpisać treść
      * bezpośrednio na płótnie.  Kolor i czcionka są ustawiane z
      * m_insertTextColor i m_insertTextFont.  Jeśli trwa edycja innego
      * tekstu, jest ona najpierw zatwierdzana.
@@ -666,7 +674,7 @@ public:
     void commitTextEdit();
     /**
      * Anuluje edycję tekstu bez zapisywania zmian.  Czyści pole
-     * QLineEdit i przywraca tryb None.
+     * QTextEdit i przywraca tryb None.
      */
     void cancelTextEdit();
 
