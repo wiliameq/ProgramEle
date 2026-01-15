@@ -1006,18 +1006,18 @@ void CanvasWidget::mousePressEvent(QMouseEvent* ev) {
             update();
             return;
         }
+        double marginWorldX = 0.0;
+        double marginWorldY = 0.0;
+        if (m_pixelsPerMeter * m_zoom != 0.0) {
+            marginWorldX = 8.0 / (m_pixelsPerMeter * m_zoom);
+            marginWorldY = 6.0 / (m_pixelsPerMeter * m_zoom);
+        }
         // Sprawdź, czy kliknięto w uchwyt rozmiaru któregoś dymka
         int resizeIdx = -1;
         ResizeHandle handle = ResizeHandle::None;
         double handleThreshold = 8.0 / (m_pixelsPerMeter * m_zoom);
         for (int i = 0; i < (int)m_textItems.size(); ++i) {
             const auto &ti = m_textItems[i];
-            double marginWorldX = 0.0;
-            double marginWorldY = 0.0;
-            if (m_pixelsPerMeter * m_zoom != 0.0) {
-                marginWorldX = 8.0 / (m_pixelsPerMeter * m_zoom);
-                marginWorldY = 6.0 / (m_pixelsPerMeter * m_zoom);
-            }
             QRectF bubbleRect = ti.boundingRect.adjusted(-marginWorldX, -marginWorldY, marginWorldX, marginWorldY);
             handle = hitResizeHandle(bubbleRect, wpos, handleThreshold);
             if (handle != ResizeHandle::None) {
@@ -1037,12 +1037,6 @@ void CanvasWidget::mousePressEvent(QMouseEvent* ev) {
         }
         // Jeśli kliknięto wewnątrz dymka, rozpocznij przeciąganie całego dymka
         int bubbleIdx = -1;
-        double marginWorldX = 0.0;
-        double marginWorldY = 0.0;
-        if (m_pixelsPerMeter * m_zoom != 0.0) {
-            marginWorldX = 8.0 / (m_pixelsPerMeter * m_zoom);
-            marginWorldY = 6.0 / (m_pixelsPerMeter * m_zoom);
-        }
         for (int i = 0; i < (int)m_textItems.size(); ++i) {
             const auto &ti = m_textItems[i];
             QRectF hitRect = ti.boundingRect.adjusted(-marginWorldX, -marginWorldY, marginWorldX, marginWorldY);
