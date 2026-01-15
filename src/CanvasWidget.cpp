@@ -1026,6 +1026,13 @@ void CanvasWidget::mousePressEvent(QMouseEvent* ev) {
         // Oblicz początkowy boundingRect dla pustego tekstu
         m_isTempBubblePinned = false;
         updateTempBoundingRect();
+        if (m_pixelsPerMeter * m_zoom != 0.0) {
+            const double offsetPxX = 40.0;
+            const double offsetPxY = -40.0;
+            QPointF offsetWorld(offsetPxX / (m_pixelsPerMeter * m_zoom),
+                                offsetPxY / (m_pixelsPerMeter * m_zoom));
+            m_tempTextItem.boundingRect.translate(offsetWorld.x(), offsetWorld.y());
+        }
         m_isTempBubblePinned = true;
         // Utwórz pole edycyjne na płótnie
         if (m_textEdit) {
