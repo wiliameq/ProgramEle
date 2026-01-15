@@ -1012,7 +1012,14 @@ void CanvasWidget::mousePressEvent(QMouseEvent* ev) {
         double handleThreshold = 8.0 / (m_pixelsPerMeter * m_zoom);
         for (int i = 0; i < (int)m_textItems.size(); ++i) {
             const auto &ti = m_textItems[i];
-            handle = hitResizeHandle(ti.boundingRect, wpos, handleThreshold);
+            double marginWorldX = 0.0;
+            double marginWorldY = 0.0;
+            if (m_pixelsPerMeter * m_zoom != 0.0) {
+                marginWorldX = 8.0 / (m_pixelsPerMeter * m_zoom);
+                marginWorldY = 6.0 / (m_pixelsPerMeter * m_zoom);
+            }
+            QRectF bubbleRect = ti.boundingRect.adjusted(-marginWorldX, -marginWorldY, marginWorldX, marginWorldY);
+            handle = hitResizeHandle(bubbleRect, wpos, handleThreshold);
             if (handle != ResizeHandle::None) {
                 resizeIdx = i;
                 break;
@@ -1087,23 +1094,21 @@ void CanvasWidget::mousePressEvent(QMouseEvent* ev) {
     // Tryb wstawiania tekstu: pierwsze kliknięcie ustawia pozycję kotwicy,
     // kolejne kliknięcia pozwalają przeciągać dymek lub końcówkę strzałki.
     if (m_mode == ToolMode::InsertText) {
-        // Jeżeli aktywne jest pole edycyjne (użytkownik wpisuje tekst)
-        // i kliknięcie znajduje się wewnątrz tego pola, pozwól mu
-        // obsłużyć zdarzenie bezpośrednio.
-        if (m_textEdit) {
-            QRect geom = m_textEdit->geometry();
-            if (geom.contains(ev->position().toPoint())) {
-                QWidget::mousePressEvent(ev);
-                return;
-            }
-        }
         // Przelicz pozycję kliknięcia do współrzędnych świata
         QPointF wpos = pos;
         // Jeżeli tymczasowy dymek jest już aktywny
         if (m_hasTempTextItem) {
             // Sprawdź, czy kliknięto w uchwyt rozmiaru dymka
+            double marginWorldX = 0.0;
+            double marginWorldY = 0.0;
+            if (m_pixelsPerMeter * m_zoom != 0.0) {
+                marginWorldX = 8.0 / (m_pixelsPerMeter * m_zoom);
+                marginWorldY = 6.0 / (m_pixelsPerMeter * m_zoom);
+            }
+            QRectF bubbleRect = m_tempTextItem.boundingRect.adjusted(-marginWorldX, -marginWorldY, marginWorldX, marginWorldY);
+            // Sprawdź, czy kliknięto w uchwyt rozmiaru dymka
             double handleThreshold = 8.0 / (m_pixelsPerMeter * m_zoom);
-            ResizeHandle handle = hitResizeHandle(m_tempTextItem.boundingRect, wpos, handleThreshold);
+            ResizeHandle handle = hitResizeHandle(bubbleRect, wpos, handleThreshold);
             if (handle != ResizeHandle::None) {
                 m_resizeHandle = handle;
                 m_isResizingTempBubble = true;
@@ -1123,13 +1128,7 @@ void CanvasWidget::mousePressEvent(QMouseEvent* ev) {
                 return;
             }
             // Sprawdź, czy kliknięto wewnątrz obszaru dymka (boundingRect)
-            double marginWorldX = 0.0;
-            double marginWorldY = 0.0;
-            if (m_pixelsPerMeter * m_zoom != 0.0) {
-                marginWorldX = 8.0 / (m_pixelsPerMeter * m_zoom);
-                marginWorldY = 6.0 / (m_pixelsPerMeter * m_zoom);
-            }
-            QRectF hitRect = m_tempTextItem.boundingRect.adjusted(-marginWorldX, -marginWorldY, marginWorldX, marginWorldY);
+            QRectF hitRect = bubbleRect;
             if (hitRect.contains(wpos)) {
                 // Rozpocznij przeciąganie dymka; zapamiętaj offset
                 m_isDraggingTempBubble = true;
@@ -1137,9 +1136,19 @@ void CanvasWidget::mousePressEvent(QMouseEvent* ev) {
                 m_tempDragOffset = wpos - m_tempTextItem.boundingRect.topLeft();
                 return;
             }
-        // Kliknięcie poza dymkiem i kotwicą podczas wstawiania: potraktuj
+            // Kliknięcie poza dymkiem i kotwicą podczas wstawiania: potraktuj
             // to jako kliknięcie poza dymkiem; nie zmieniaj położenia.
             return;
+        }
+        // Jeżeli aktywne jest pole edycyjne (użytkownik wpisuje tekst)
+        // i kliknięcie znajduje się wewnątrz tego pola, pozwól mu
+        // obsłużyć zdarzenie bezpośrednio.
+        if (m_textEdit) {
+            QRect geom = m_textEdit->geometry();
+            if (geom.contains(ev->position().toPoint())) {
+                QWidget::mousePressEvent(ev);
+                return;
+            }
         }
         // Jeśli tymczasowy dymek jeszcze nie istnieje, to klik
         // ustawia pozycję kotwicy i rozpoczyna edycję.  Utwórz
