@@ -221,6 +221,9 @@ private:
     // resetowane.
     bool m_isDraggingTempBubble = false;
     bool m_isDraggingTempAnchor = false;
+    // Flaga wskazująca, że dymek tymczasowy ma ustaloną pozycję
+    // niezależną od kotwicy (np. po utworzeniu lub przesunięciu dymka).
+    bool m_isTempBubblePinned = false;
     // Wektor odległości między kliknięciem a początkiem dymka (lewy górny
     // narożnik boundingRect) używany podczas przeciągania dymka.  Dzięki
     // temu dymek nie "skacze" do pozycji myszy.

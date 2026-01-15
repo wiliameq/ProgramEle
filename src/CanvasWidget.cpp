@@ -58,6 +58,7 @@ CanvasWidget::CanvasWidget(QWidget* parent, ProjectSettings* settings)
     m_hasTempTextItem = false;
     m_isDraggingTempBubble = false;
     m_isDraggingTempAnchor = false;
+    m_isTempBubblePinned = false;
     m_isDraggingSelectedAnchor = false;
 }
 
@@ -215,6 +216,7 @@ void CanvasWidget::startInsertText(QWidget* parent) {
     m_hasTempTextItem = false;
     m_isDraggingTempBubble = false;
     m_isDraggingTempAnchor = false;
+    m_isTempBubblePinned = false;
     m_editingTextIndex = -1;
     m_mode = ToolMode::InsertText;
     // Ustaw kursor krzyża
@@ -990,14 +992,8 @@ void CanvasWidget::mousePressEvent(QMouseEvent* ev) {
                 m_tempDragOffset = wpos - m_tempTextItem.boundingRect.topLeft();
                 return;
             }
-            // Kliknięcie poza dymkiem i kotwicą podczas wstawiania: potraktuj
-            // to jako przeniesienie kotwicy w nowe miejsce i rozpoczęcie
-            // nowej edycji.  Zaktualizuj pozycję, boundingRect oraz
-            // ustaw pole edycyjne w nowym położeniu.
-            m_tempTextItem.pos = wpos;
-            updateTempBoundingRect();
-            repositionTempTextEdit();
-            update();
+        // Kliknięcie poza dymkiem i kotwicą podczas wstawiania: potraktuj
+            // to jako kliknięcie poza dymkiem; nie zmieniaj położenia.
             return;
         }
         // Jeśli tymczasowy dymek jeszcze nie istnieje, to klik
@@ -1014,7 +1010,9 @@ void CanvasWidget::mousePressEvent(QMouseEvent* ev) {
         m_tempTextItem.bgColor = m_insertBubbleFillColor;
         m_tempTextItem.borderColor = m_insertBubbleBorderColor;
         // Oblicz początkowy boundingRect dla pustego tekstu
+        m_isTempBubblePinned = false;
         updateTempBoundingRect();
+        m_isTempBubblePinned = true;
         // Utwórz pole edycyjne na płótnie
         if (m_textEdit) {
             // Nie powinno mieć miejsca, ale dla pewności usuń stare pole
@@ -1119,11 +1117,9 @@ void CanvasWidget::mouseMoveEvent(QMouseEvent* ev) {
             return;
         }
         if (m_isDraggingTempAnchor) {
-            // Zmień pozycję kotwicy i przelicz boundingRect
+            // Zmień pozycję kotwicy bez przesuwania dymka
             QPointF wpos = toWorld(ev->localPos());
             m_tempTextItem.pos = wpos;
-            updateTempBoundingRect();
-            repositionTempTextEdit();
             update();
             return;
         }
@@ -1142,42 +1138,10 @@ void CanvasWidget::mouseMoveEvent(QMouseEvent* ev) {
             return;
         }
         if (m_isDraggingSelectedAnchor) {
-            // Przeciąganie kotwicy – aktualizuj pozycję kotwicy i przelicz boundingRect
+            // Przeciąganie kotwicy bez przesuwania dymka
             QPointF wpos = toWorld(ev->localPos());
             TextItem &ti = m_textItems[m_selectedTextIndex];
             ti.pos = wpos;
-            // Oblicz wymiary tekstu (przy pustym użyj spacji)
-            QString text = ti.text;
-            if (text.isEmpty()) text = QStringLiteral(" ");
-            QFontMetrics fm(ti.font);
-            int textW = fm.horizontalAdvance(text);
-            int textH = fm.height();
-            double w_m = 0.0;
-            double h_m = 0.0;
-            if (m_pixelsPerMeter * m_zoom != 0.0) {
-                w_m = textW / (m_pixelsPerMeter * m_zoom);
-                h_m = textH / (m_pixelsPerMeter * m_zoom);
-            }
-            double x_m, y_m;
-            switch (ti.anchor) {
-            case CalloutAnchor::Bottom:
-                x_m = ti.pos.x() - w_m / 2.0;
-                y_m = ti.pos.y() - h_m;
-                break;
-            case CalloutAnchor::Top:
-                x_m = ti.pos.x() - w_m / 2.0;
-                y_m = ti.pos.y();
-                break;
-            case CalloutAnchor::Left:
-                x_m = ti.pos.x();
-                y_m = ti.pos.y() - h_m / 2.0;
-                break;
-            case CalloutAnchor::Right:
-                x_m = ti.pos.x() - w_m;
-                y_m = ti.pos.y() - h_m / 2.0;
-                break;
-            }
-            ti.boundingRect = QRectF(x_m, y_m, w_m, h_m);
             update();
             return;
         }
@@ -1352,24 +1316,27 @@ void CanvasWidget::updateTempBoundingRect() {
         w_m = textW / (m_pixelsPerMeter * m_zoom);
         h_m = textH / (m_pixelsPerMeter * m_zoom);
     }
-    double x_m, y_m;
-    switch (m_tempTextItem.anchor) {
-    case CalloutAnchor::Bottom:
-        x_m = m_tempTextItem.pos.x() - w_m / 2.0;
-        y_m = m_tempTextItem.pos.y() - h_m;
-        break;
-    case CalloutAnchor::Top:
-        x_m = m_tempTextItem.pos.x() - w_m / 2.0;
-        y_m = m_tempTextItem.pos.y();
-        break;
-    case CalloutAnchor::Left:
-        x_m = m_tempTextItem.pos.x();
-        y_m = m_tempTextItem.pos.y() - h_m / 2.0;
-        break;
-    case CalloutAnchor::Right:
-        x_m = m_tempTextItem.pos.x() - w_m;
-        y_m = m_tempTextItem.pos.y() - h_m / 2.0;
-        break;
+    double x_m = m_tempTextItem.boundingRect.left();
+    double y_m = m_tempTextItem.boundingRect.top();
+    if (!m_isTempBubblePinned || m_tempTextItem.boundingRect.isNull()) {
+        switch (m_tempTextItem.anchor) {
+        case CalloutAnchor::Bottom:
+            x_m = m_tempTextItem.pos.x() - w_m / 2.0;
+            y_m = m_tempTextItem.pos.y() - h_m;
+            break;
+        case CalloutAnchor::Top:
+            x_m = m_tempTextItem.pos.x() - w_m / 2.0;
+            y_m = m_tempTextItem.pos.y();
+            break;
+        case CalloutAnchor::Left:
+            x_m = m_tempTextItem.pos.x();
+            y_m = m_tempTextItem.pos.y() - h_m / 2.0;
+            break;
+        case CalloutAnchor::Right:
+            x_m = m_tempTextItem.pos.x() - w_m;
+            y_m = m_tempTextItem.pos.y() - h_m / 2.0;
+            break;
+        }
     }
     m_tempTextItem.boundingRect = QRectF(x_m, y_m, w_m, h_m);
 }
@@ -1419,6 +1386,7 @@ void CanvasWidget::commitTempTextItem() {
     m_hasTempTextItem = false;
     m_isDraggingTempBubble = false;
     m_isDraggingTempAnchor = false;
+    m_isTempBubblePinned = false;
     // Wróć do trybu None
     m_mode = ToolMode::None;
     update();
@@ -1437,6 +1405,7 @@ void CanvasWidget::cancelTempTextItem() {
     m_hasTempTextItem = false;
     m_isDraggingTempBubble = false;
     m_isDraggingTempAnchor = false;
+    m_isTempBubblePinned = false;
     m_mode = ToolMode::None;
     update();
     emit measurementFinished();
