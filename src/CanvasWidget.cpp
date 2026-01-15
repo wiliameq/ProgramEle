@@ -1030,7 +1030,7 @@ void CanvasWidget::mousePressEvent(QMouseEvent* ev) {
             m_selectedMeasureIndex = -1;
             m_resizeHandle = handle;
             m_isResizingSelectedBubble = true;
-            m_resizeStartRect = m_textItems[resizeIdx].boundingRect;
+            m_resizeStartRect = m_textItems[resizeIdx].boundingRect.adjusted(-marginWorldX, -marginWorldY, marginWorldX, marginWorldY);
             m_resizeStartPos = wpos;
             update();
             return;
@@ -1112,7 +1112,7 @@ void CanvasWidget::mousePressEvent(QMouseEvent* ev) {
             if (handle != ResizeHandle::None) {
                 m_resizeHandle = handle;
                 m_isResizingTempBubble = true;
-                m_resizeStartRect = m_tempTextItem.boundingRect;
+                m_resizeStartRect = bubbleRect;
                 m_resizeStartPos = wpos;
                 return;
             }
@@ -1315,7 +1315,13 @@ void CanvasWidget::mouseMoveEvent(QMouseEvent* ev) {
         rect = rect.normalized();
         if (rect.width() < minW) rect.setWidth(minW);
         if (rect.height() < minH) rect.setHeight(minH);
-        m_tempTextItem.boundingRect = rect;
+        double marginWorldX = 0.0;
+        double marginWorldY = 0.0;
+        if (m_pixelsPerMeter * m_zoom != 0.0) {
+            marginWorldX = 8.0 / (m_pixelsPerMeter * m_zoom);
+            marginWorldY = 6.0 / (m_pixelsPerMeter * m_zoom);
+        }
+        m_tempTextItem.boundingRect = rect.adjusted(marginWorldX, marginWorldY, -marginWorldX, -marginWorldY);
         m_isTempBubblePinned = true;
         repositionTempTextEdit();
         update();
@@ -1345,7 +1351,13 @@ void CanvasWidget::mouseMoveEvent(QMouseEvent* ev) {
         rect = rect.normalized();
         if (rect.width() < minW) rect.setWidth(minW);
         if (rect.height() < minH) rect.setHeight(minH);
-        m_textItems[m_selectedTextIndex].boundingRect = rect;
+        double marginWorldX = 0.0;
+        double marginWorldY = 0.0;
+        if (m_pixelsPerMeter * m_zoom != 0.0) {
+            marginWorldX = 8.0 / (m_pixelsPerMeter * m_zoom);
+            marginWorldY = 6.0 / (m_pixelsPerMeter * m_zoom);
+        }
+        m_textItems[m_selectedTextIndex].boundingRect = rect.adjusted(marginWorldX, marginWorldY, -marginWorldX, -marginWorldY);
         update();
         return;
     }
