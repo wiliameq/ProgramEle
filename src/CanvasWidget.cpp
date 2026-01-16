@@ -1008,8 +1008,6 @@ void CanvasWidget::mousePressEvent(QMouseEvent* ev) {
             update();
             return;
         }
-        const double marginX = 8.0;
-        const double marginY = 6.0;
         // Sprawdź, czy kliknięto w uchwyt rozmiaru któregoś dymka
         int resizeIdx = -1;
         ResizeHandle handle = ResizeHandle::None;
@@ -1019,8 +1017,7 @@ void CanvasWidget::mousePressEvent(QMouseEvent* ev) {
             QPointF topLeftScreen = toScreen(ti.boundingRect.topLeft());
             QSizeF sizePx(ti.boundingRect.width() * m_pixelsPerMeter * m_zoom,
                           ti.boundingRect.height() * m_pixelsPerMeter * m_zoom);
-            QRectF textBoxScreen(topLeftScreen, sizePx);
-            QRectF bubbleRect = textBoxScreen.adjusted(-marginX, -marginY, marginX, marginY);
+            QRectF bubbleRect(topLeftScreen, sizePx);
             handle = hitResizeHandle(bubbleRect, ev->position(), handleThreshold);
             if (handle != ResizeHandle::None) {
                 resizeIdx = i;
@@ -1035,8 +1032,8 @@ void CanvasWidget::mousePressEvent(QMouseEvent* ev) {
             QPointF topLeftScreen = toScreen(m_textItems[resizeIdx].boundingRect.topLeft());
             QSizeF sizePx(m_textItems[resizeIdx].boundingRect.width() * m_pixelsPerMeter * m_zoom,
                           m_textItems[resizeIdx].boundingRect.height() * m_pixelsPerMeter * m_zoom);
-            QRectF textBoxScreen(topLeftScreen, sizePx);
-            m_resizeStartRect = textBoxScreen.adjusted(-marginX, -marginY, marginX, marginY);
+            QRectF bubbleRect(topLeftScreen, sizePx);
+            m_resizeStartRect = bubbleRect;
             m_resizeStartPos = ev->position();
             m_isDraggingSelectedText = false;
             m_isDraggingSelectedAnchor = false;
@@ -1051,8 +1048,7 @@ void CanvasWidget::mousePressEvent(QMouseEvent* ev) {
             QPointF topLeftScreen = toScreen(ti.boundingRect.topLeft());
             QSizeF sizePx(ti.boundingRect.width() * m_pixelsPerMeter * m_zoom,
                           ti.boundingRect.height() * m_pixelsPerMeter * m_zoom);
-            QRectF textBoxScreen(topLeftScreen, sizePx);
-            QRectF hitRect = textBoxScreen.adjusted(-marginX, -marginY, marginX, marginY);
+            QRectF hitRect(topLeftScreen, sizePx);
             if (hitRect.contains(ev->position())) {
                 bubbleIdx = i;
                 break;
@@ -1106,13 +1102,10 @@ void CanvasWidget::mousePressEvent(QMouseEvent* ev) {
         QPointF wpos = pos;
         // Jeżeli tymczasowy dymek jest już aktywny
         if (m_hasTempTextItem) {
-            const double marginX = 8.0;
-            const double marginY = 6.0;
             QPointF topLeftScreen = toScreen(m_tempTextItem.boundingRect.topLeft());
             QSizeF sizePx(m_tempTextItem.boundingRect.width() * m_pixelsPerMeter * m_zoom,
                           m_tempTextItem.boundingRect.height() * m_pixelsPerMeter * m_zoom);
-            QRectF textBoxScreen(topLeftScreen, sizePx);
-            QRectF bubbleRect = textBoxScreen.adjusted(-marginX, -marginY, marginX, marginY);
+            QRectF bubbleRect(topLeftScreen, sizePx);
             // Sprawdź, czy kliknięto w uchwyt rozmiaru dymka
             double handleThreshold = 10.0;
             ResizeHandle handle = hitResizeHandle(bubbleRect, ev->position(), handleThreshold);
@@ -1140,8 +1133,7 @@ void CanvasWidget::mousePressEvent(QMouseEvent* ev) {
                 return;
             }
             // Sprawdź, czy kliknięto wewnątrz obszaru dymka (boundingRect)
-            QRectF hitRect = bubbleRect;
-            if (hitRect.contains(ev->position())) {
+            if (bubbleRect.contains(ev->position())) {
                 // Rozpocznij przeciąganie dymka; zapamiętaj offset
                 m_isDraggingTempBubble = true;
                 m_isDraggingTempAnchor = false;
@@ -1309,6 +1301,16 @@ void CanvasWidget::mouseMoveEvent(QMouseEvent* ev) {
         QPointF now = ev->position();
         m_viewOffset += (now - m_lastMouseScreen);
         m_lastMouseScreen = now;
+        if (m_textEdit && m_hasTempTextItem) {
+            repositionTempTextEdit();
+        } else if (m_textEdit && m_editingTextIndex >= 0 && m_editingTextIndex < (int)m_textItems.size()) {
+            QPointF tl = toScreen(m_textItems[m_editingTextIndex].boundingRect.topLeft());
+            QSizeF sizePx(m_textItems[m_editingTextIndex].boundingRect.width() * m_pixelsPerMeter * m_zoom,
+                          m_textItems[m_editingTextIndex].boundingRect.height() * m_pixelsPerMeter * m_zoom);
+            m_textEdit->move(tl.toPoint());
+            m_textEdit->resize(std::max(40, (int)std::round(sizePx.width())),
+                               std::max(20, (int)std::round(sizePx.height())));
+        }
         update();
         return;
     }
@@ -1336,11 +1338,8 @@ void CanvasWidget::mouseMoveEvent(QMouseEvent* ev) {
         rect = rect.normalized();
         if (rect.width() < minW) rect.setWidth(minW);
         if (rect.height() < minH) rect.setHeight(minH);
-        const double marginX = 8.0;
-        const double marginY = 6.0;
-        QRectF textBoxScreen = rect.adjusted(marginX, marginY, -marginX, -marginY);
-        QPointF topLeftWorld = toWorld(textBoxScreen.topLeft());
-        QPointF bottomRightWorld = toWorld(textBoxScreen.bottomRight());
+        QPointF topLeftWorld = toWorld(rect.topLeft());
+        QPointF bottomRightWorld = toWorld(rect.bottomRight());
         m_tempTextItem.boundingRect = QRectF(topLeftWorld, bottomRightWorld).normalized();
         m_isTempBubblePinned = true;
         repositionTempTextEdit();
@@ -1371,16 +1370,13 @@ void CanvasWidget::mouseMoveEvent(QMouseEvent* ev) {
         rect = rect.normalized();
         if (rect.width() < minW) rect.setWidth(minW);
         if (rect.height() < minH) rect.setHeight(minH);
-        const double marginX = 8.0;
-        const double marginY = 6.0;
-        QRectF textBoxScreen = rect.adjusted(marginX, marginY, -marginX, -marginY);
-        QPointF topLeftWorld = toWorld(textBoxScreen.topLeft());
-        QPointF bottomRightWorld = toWorld(textBoxScreen.bottomRight());
+        QPointF topLeftWorld = toWorld(rect.topLeft());
+        QPointF bottomRightWorld = toWorld(rect.bottomRight());
         m_textItems[m_selectedTextIndex].boundingRect = QRectF(topLeftWorld, bottomRightWorld).normalized();
         if (m_textEdit && m_editingTextIndex == m_selectedTextIndex) {
-            m_textEdit->move(textBoxScreen.topLeft().toPoint());
-            m_textEdit->resize(std::max(40, (int)std::round(textBoxScreen.width())),
-                               std::max(20, (int)std::round(textBoxScreen.height())));
+            m_textEdit->move(rect.topLeft().toPoint());
+            m_textEdit->resize(std::max(40, (int)std::round(rect.width())),
+                               std::max(20, (int)std::round(rect.height())));
         }
         update();
         return;
@@ -1470,6 +1466,16 @@ void CanvasWidget::wheelEvent(QWheelEvent* ev) {
     if (m_zoom < 0.1) m_zoom = 0.1;
     if (m_zoom > 50.0) m_zoom = 50.0;
     m_viewOffset = screenPos - worldPos * m_zoom;
+    if (m_textEdit && m_hasTempTextItem) {
+        repositionTempTextEdit();
+    } else if (m_textEdit && m_editingTextIndex >= 0 && m_editingTextIndex < (int)m_textItems.size()) {
+        QPointF tl = toScreen(m_textItems[m_editingTextIndex].boundingRect.topLeft());
+        QSizeF sizePx(m_textItems[m_editingTextIndex].boundingRect.width() * m_pixelsPerMeter * m_zoom,
+                      m_textItems[m_editingTextIndex].boundingRect.height() * m_pixelsPerMeter * m_zoom);
+        m_textEdit->move(tl.toPoint());
+        m_textEdit->resize(std::max(40, (int)std::round(sizePx.width())),
+                           std::max(20, (int)std::round(sizePx.height())));
+    }
     update();
     ev->accept();
 }
