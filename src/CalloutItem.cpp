@@ -4,6 +4,7 @@
 #include <QPainter>
 #include <QTextDocument>
 #include <QLineF>
+#include <QCursor>
 
 #include <algorithm>
 
@@ -170,18 +171,18 @@ void CalloutItem::mousePressEvent(QGraphicsSceneMouseEvent *event) {
     m_dragOffset = event->scenePos() - pos();
 
     if (m_activeHandle == Handle::Anchor) {
-        setCursor(Qt::CrossCursor);
+        setCursor(QCursor(Qt::CrossCursor));
         event->accept();
         return;
     }
 
     if (m_activeHandle != Handle::None) {
-        setCursor(Qt::SizeAllCursor);
+        setCursor(QCursor(Qt::SizeAllCursor));
         event->accept();
         return;
     }
 
-    setCursor(Qt::ClosedHandCursor);
+    setCursor(QCursor(Qt::ClosedHandCursor));
     QGraphicsObject::mousePressEvent(event);
 }
 
