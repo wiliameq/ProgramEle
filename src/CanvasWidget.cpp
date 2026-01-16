@@ -45,6 +45,17 @@ CanvasWidget::ResizeHandle hitResizeHandle(const QRectF &rect, const QPointF &po
 }
 } // namespace
 
+namespace {
+QPointF clampAnchorBelowBubble(const QRectF &bubbleRect, const QPointF &anchorPos, double gapWorld) {
+    QPointF clamped = anchorPos;
+    double minY = bubbleRect.bottom() + gapWorld;
+    if (clamped.y() < minY) {
+        clamped.setY(minY);
+    }
+    return clamped;
+}
+} // namespace
+
 CanvasWidget::CanvasWidget(QWidget* parent, ProjectSettings* settings)
     : QWidget(parent), m_settings(settings) {
     setMouseTracking(true);
@@ -1191,7 +1202,11 @@ void CanvasWidget::mousePressEvent(QMouseEvent* ev) {
             // Nie powinno mieć miejsca, ale dla pewności usuń stare pole
             cancelTextEdit();
         }
-    m_textEdit = new QTextEdit(this);
+        if (m_tempTextItem.anchor == CalloutAnchor::Bottom && m_pixelsPerMeter * m_zoom != 0.0) {
+            double gapWorld = 12.0 / (m_pixelsPerMeter * m_zoom);
+            m_tempTextItem.pos = clampAnchorBelowBubble(m_tempTextItem.boundingRect, m_tempTextItem.pos, gapWorld);
+        }
+        m_textEdit = new QTextEdit(this);
     m_textEdit->setFrameStyle(QFrame::NoFrame);
     m_textEdit->setAcceptRichText(false);
     m_textEdit->installEventFilter(this);
@@ -1397,7 +1412,12 @@ void CanvasWidget::mouseMoveEvent(QMouseEvent* ev) {
         if (m_isDraggingTempAnchor) {
             // Zmień pozycję kotwicy bez przesuwania dymka
             QPointF wpos = toWorld(ev->localPos());
-            m_tempTextItem.pos = wpos;
+            if (m_tempTextItem.anchor == CalloutAnchor::Bottom && m_pixelsPerMeter * m_zoom != 0.0) {
+                double gapWorld = 12.0 / (m_pixelsPerMeter * m_zoom);
+                m_tempTextItem.pos = clampAnchorBelowBubble(m_tempTextItem.boundingRect, wpos, gapWorld);
+            } else {
+                m_tempTextItem.pos = wpos;
+            }
             update();
             return;
         }
@@ -1418,7 +1438,12 @@ void CanvasWidget::mouseMoveEvent(QMouseEvent* ev) {
             // Przeciąganie kotwicy bez przesuwania dymka
             QPointF wpos = toWorld(ev->localPos());
             TextItem &ti = m_textItems[m_selectedTextIndex];
-            ti.pos = wpos;
+            if (ti.anchor == CalloutAnchor::Bottom && m_pixelsPerMeter * m_zoom != 0.0) {
+                double gapWorld = 12.0 / (m_pixelsPerMeter * m_zoom);
+                ti.pos = clampAnchorBelowBubble(ti.boundingRect, wpos, gapWorld);
+            } else {
+                ti.pos = wpos;
+            }
             update();
             return;
         }
