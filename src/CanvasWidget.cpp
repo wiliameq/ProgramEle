@@ -1040,6 +1040,7 @@ void CanvasWidget::mousePressEvent(QMouseEvent* ev) {
             m_resizeStartPos = ev->position();
             m_isDraggingSelectedText = false;
             m_isDraggingSelectedAnchor = false;
+            grabMouse();
             update();
             return;
         }
@@ -1064,6 +1065,7 @@ void CanvasWidget::mousePressEvent(QMouseEvent* ev) {
             m_isDraggingSelectedAnchor = false;
             // Offset między kliknięciem a lewym górnym rogiem dymka
             m_dragStartOffset = wpos - m_textItems[bubbleIdx].boundingRect.topLeft();
+            grabMouse();
             update();
             return;
         }
@@ -1121,6 +1123,7 @@ void CanvasWidget::mousePressEvent(QMouseEvent* ev) {
                 m_resizeStartPos = ev->position();
                 m_isDraggingTempBubble = false;
                 m_isDraggingTempAnchor = false;
+                grabMouse();
                 return;
             }
             // Sprawdź, czy kliknięcie znajduje się w pobliżu kotwicy
@@ -1133,6 +1136,7 @@ void CanvasWidget::mousePressEvent(QMouseEvent* ev) {
                 m_isDraggingTempAnchor = true;
                 m_isDraggingTempBubble = false;
                 m_isResizingTempBubble = false;
+                grabMouse();
                 return;
             }
             // Sprawdź, czy kliknięto wewnątrz obszaru dymka (boundingRect)
@@ -1143,6 +1147,7 @@ void CanvasWidget::mousePressEvent(QMouseEvent* ev) {
                 m_isDraggingTempAnchor = false;
                 m_isResizingTempBubble = false;
                 m_tempDragOffset = wpos - m_tempTextItem.boundingRect.topLeft();
+                grabMouse();
                 return;
             }
             // Kliknięcie poza dymkiem i kotwicą podczas wstawiania: potraktuj
@@ -1449,6 +1454,7 @@ void CanvasWidget::mouseReleaseEvent(QMouseEvent* ev) {
         m_isResizingTempBubble = false;
         m_isResizingSelectedBubble = false;
         m_resizeHandle = ResizeHandle::None;
+        releaseMouse();
     }
     QWidget::mouseReleaseEvent(ev);
 }
@@ -1612,7 +1618,18 @@ void CanvasWidget::updateTempBoundingRect() {
             break;
         }
     }
-    m_tempTextItem.boundingRect = QRectF(x_m, y_m, w_m, h_m);
+    QRectF rect(x_m, y_m, w_m, h_m);
+    if (m_isTempBubblePinned && m_tempTextItem.anchor == CalloutAnchor::Bottom) {
+        const double marginWorldY = (m_pixelsPerMeter * m_zoom != 0.0)
+            ? 6.0 / (m_pixelsPerMeter * m_zoom)
+            : 0.0;
+        double bubbleBottom = rect.bottom() + marginWorldY;
+        if (bubbleBottom >= m_tempTextItem.pos.y() - marginWorldY) {
+            double shift = bubbleBottom - (m_tempTextItem.pos.y() - marginWorldY);
+            rect.translate(0.0, -shift);
+        }
+    }
+    m_tempTextItem.boundingRect = rect;
 }
 
 void CanvasWidget::repositionTempTextEdit() {
