@@ -108,7 +108,7 @@ void ToolsDockWidget::populateInitialCategories() {
     // zgodnie z bieżącą lokalizacją.
     Category tools;
     tools.name = tr("Narzędzia");
-    tools.items << tr("Zaznacz") << tr("Wstaw tekst") << tr("Usuń");
+    tools.items << tr("Zaznacz") << tr("Wstaw komentarz") << tr("Usuń");
     tools.visible = true;
     m_categories.append(tools);
 

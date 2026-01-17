@@ -82,9 +82,9 @@ void ProjectNavigatorWidget::populateTree() {
     // jako osobny moduł z własnym widżetem, więc nie dodajemy jej do drzewa.
 
     // Dodatkowa kategoria: Inne - pozwala włączać/wyłączać widoczność
-    // tekstów wstawianych na płótno.  Element "Tekst" reprezentuje warstwę
-    // tekstową, dzięki czemu można ją włączać i wyłączać z panelu Projekt.
+    // komentarzy wstawianych na płótno.  Element "Komentarze" reprezentuje
+    // warstwę komentarzy, dzięki czemu można ją włączać i wyłączać z panelu Projekt.
     auto* other = new QTreeWidgetItem(m_tree, QStringList() << tr("Inne"));
-    new QTreeWidgetItem(other, QStringList() << tr("Tekst"));
+    new QTreeWidgetItem(other, QStringList() << tr("Komentarze"));
     other->setExpanded(true);
 }

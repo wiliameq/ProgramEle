@@ -16,5 +16,6 @@ add_executable(${PROJECT_NAME}
     src/ProjectNavigatorWidget.h src/ProjectNavigatorWidget.cpp
     src/ToolSettingsWidget.h src/ToolSettingsWidget.cpp
     src/FavoritesDockWidget.h src/FavoritesDockWidget.cpp
+    src/CalloutItem.h src/CalloutItem.cpp
 )
 target_link_libraries(${PROJECT_NAME} PRIVATE Qt6::Widgets Qt6::Gui Qt6::Core Qt6::Pdf Qt6::PrintSupport)
