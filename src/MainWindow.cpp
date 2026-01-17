@@ -215,7 +215,7 @@ void MainWindow::onToolSelected(const QString& tool) {
     if (tool == QString::fromUtf8("Zaznacz")) {
         m_canvas->startSelect();
         showSelectControls();
-    } else if (tool == QString::fromUtf8("Wstaw tekst")) {
+    } else if (tool == QString::fromUtf8("Wstaw komentarz")) {
         m_canvas->startInsertText(this);
         showInsertTextControls();
     } else if (tool == QString::fromUtf8("Usuń")) {

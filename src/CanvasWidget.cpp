@@ -80,7 +80,7 @@ CanvasWidget::CanvasWidget(QWidget* parent, ProjectSettings* settings)
     m_layerVisibility[QStringLiteral("Oświetlenie")] = true;
     m_layerVisibility[QStringLiteral("Gniazda RJ45")] = true;
     m_layerVisibility[QStringLiteral("Pomiary")]     = true;
-    m_layerVisibility[QStringLiteral("Tekst")]       = true;
+    m_layerVisibility[QStringLiteral("Komentarze")]  = true;
 
     // Ustaw domyślne kolory dla nowo wstawianych dymków
     m_insertBubbleFillColor = QColor(255, 255, 255, 200);
@@ -177,8 +177,8 @@ void CanvasWidget::insertPendingText(const QString& text) {
     // Ustaw kolory wypełnienia i obramowania z bieżących domyślnych
     item.bgColor = m_insertBubbleFillColor;
     item.borderColor = m_insertBubbleBorderColor;
-    // Warstwa dla tekstu
-    item.layer = QStringLiteral("Tekst");
+    // Warstwa dla komentarzy
+    item.layer = QStringLiteral("Komentarze");
     m_textItems.push_back(item);
     // Wyczyść stan
     m_hasTextInsertPos = false;
@@ -1175,7 +1175,7 @@ void CanvasWidget::mousePressEvent(QMouseEvent* ev) {
         m_tempTextItem.text.clear();
         m_tempTextItem.color = m_insertTextColor;
         m_tempTextItem.font = m_insertTextFont;
-        m_tempTextItem.layer = QStringLiteral("Tekst");
+        m_tempTextItem.layer = QStringLiteral("Komentarze");
         m_tempTextItem.anchor = m_insertTextAnchor;
         // Ustaw kolory wypełnienia i obramowania
         m_tempTextItem.bgColor = m_insertBubbleFillColor;

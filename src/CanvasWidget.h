@@ -94,10 +94,10 @@ struct TextItem {
     QRectF boundingRect;
 
     /**
-     * Nazwa warstwy dla elementu tekstowego.  Tekst jest traktowany jako
-     * odrębna warstwa domyślnie, ale można przypisać go do innej kategorii.
+     * Nazwa warstwy dla elementu komentarza.  Komentarze są traktowane jako
+     * odrębna warstwa domyślnie, ale można przypisać je do innej kategorii.
      */
-    QString layer = QStringLiteral("Tekst");
+    QString layer = QStringLiteral("Komentarze");
 
     /**
      * Kierunek (kotwica) strzałki dymka.  Pozwala określić, w którą stronę
