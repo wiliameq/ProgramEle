@@ -25,9 +25,9 @@
 #include <QMessageBox>
 #include <QInputDialog>
 // Nowe widżety wykorzystywane w panelu wstawiania tekstu
-#include <QLineEdit>
 #include <QCheckBox>
 #include <QInputDialog>
+#include <QFontComboBox>
 // Dodane do obsługi rozwijanych list i wariantów
 #include <QComboBox>
 #include <QVariant>
@@ -215,7 +215,7 @@ void MainWindow::onToolSelected(const QString& tool) {
     if (tool == QString::fromUtf8("Zaznacz")) {
         m_canvas->startSelect();
         showSelectControls();
-    } else if (tool == QString::fromUtf8("Wstaw tekst")) {
+    } else if (tool == QString::fromUtf8("Wstaw komentarz")) {
         m_canvas->startInsertText(this);
         showInsertTextControls();
     } else if (tool == QString::fromUtf8("Usuń")) {
@@ -301,9 +301,6 @@ void MainWindow::showInsertTextControls() {
     QHBoxLayout* lay = new QHBoxLayout(panel);
     lay->setContentsMargins(4,2,4,2);
     lay->setSpacing(8);
-    // Instrukcja
-    auto info = new QLabel(QString::fromUtf8("Kliknij na płótnie, aby określić pozycję strzałki. Następnie wpisz tekst w dymku i przeciągaj dymek lub strzałkę."), panel);
-    lay->addWidget(info);
     // Kolor tekstu
     auto colorLbl = new QLabel(QString::fromUtf8("Kolor tekstu:"), panel);
     lay->addWidget(colorLbl);
@@ -355,51 +352,40 @@ void MainWindow::showInsertTextControls() {
             updateBorderBtn(chosen);
         }
     });
-    // Kierunek strzałki
-    auto anchorLbl = new QLabel(QString::fromUtf8("Strzałka:"), panel);
-    lay->addWidget(anchorLbl);
-    auto anchorCombo = new QComboBox(panel);
-    anchorCombo->addItem(QString::fromUtf8("Dół"), QVariant::fromValue((int)CalloutAnchor::Bottom));
-    anchorCombo->addItem(QString::fromUtf8("Góra"), QVariant::fromValue((int)CalloutAnchor::Top));
-    anchorCombo->addItem(QString::fromUtf8("Lewo"), QVariant::fromValue((int)CalloutAnchor::Left));
-    anchorCombo->addItem(QString::fromUtf8("Prawo"), QVariant::fromValue((int)CalloutAnchor::Right));
-    // Ustaw aktualny anchor
-    int curAnchor = (int)m_canvas->insertTextAnchor();
-    for (int i = 0; i < anchorCombo->count(); ++i) {
-        if (anchorCombo->itemData(i).toInt() == curAnchor) {
-            anchorCombo->setCurrentIndex(i);
-            break;
-        }
-    }
-    lay->addWidget(anchorCombo);
-    connect(anchorCombo, QOverload<int>::of(&QComboBox::currentIndexChanged), this, [this, anchorCombo]() {
-        CalloutAnchor a = static_cast<CalloutAnchor>(anchorCombo->currentData().toInt());
-        m_canvas->setInsertTextAnchor(a);
-    });
+    // Rodzaj czcionki
+    auto fontLbl = new QLabel(QString::fromUtf8("Czcionka:"), panel);
+    lay->addWidget(fontLbl);
+    auto fontCombo = new QFontComboBox(panel);
+    fontCombo->setCurrentFont(m_canvas->insertTextFont());
+    lay->addWidget(fontCombo);
     // Rozmiar czcionki
     auto sizeLbl = new QLabel(QString::fromUtf8("Rozmiar:"), panel);
     lay->addWidget(sizeLbl);
     auto sizeSpin = new QSpinBox(panel);
     sizeSpin->setRange(6, 48);
-    sizeSpin->setValue(m_canvas->insertTextFont().pointSize() > 0 ? m_canvas->insertTextFont().pointSize() : 12);
+    const QFont baseFont = m_canvas->insertTextFont();
+    sizeSpin->setValue(baseFont.pointSize() > 0 ? baseFont.pointSize() : 12);
     lay->addWidget(sizeSpin);
     // Styl czcionki (pogrubienie, kursywa, podkreślenie)
     auto boldCheck = new QCheckBox(QString::fromUtf8("B"), panel);
     boldCheck->setToolTip(QString::fromUtf8("Pogrubienie"));
+    boldCheck->setChecked(baseFont.bold());
     lay->addWidget(boldCheck);
     auto italicCheck = new QCheckBox(QString::fromUtf8("I"), panel);
     italicCheck->setToolTip(QString::fromUtf8("Kursywa"));
+    italicCheck->setChecked(baseFont.italic());
     lay->addWidget(italicCheck);
     auto underlineCheck = new QCheckBox(QString::fromUtf8("U"), panel);
     underlineCheck->setToolTip(QString::fromUtf8("Podkreślenie"));
+    underlineCheck->setChecked(baseFont.underline());
     lay->addWidget(underlineCheck);
     lay->addStretch();
     // Potwierdź
     auto confirmBtn = new QPushButton(QString::fromUtf8("Potwierdź"), panel);
     lay->addWidget(confirmBtn);
-    connect(confirmBtn, &QPushButton::clicked, this, [this, sizeSpin, boldCheck, italicCheck, underlineCheck]() {
+    connect(confirmBtn, &QPushButton::clicked, this, [this, fontCombo, sizeSpin, boldCheck, italicCheck, underlineCheck]() {
         // Ustaw czcionkę dla nowego dymka
-        QFont font;
+        QFont font = fontCombo->currentFont();
         font.setPointSize(sizeSpin->value());
         font.setBold(boldCheck->isChecked());
         font.setItalic(italicCheck->isChecked());
@@ -410,8 +396,8 @@ void MainWindow::showInsertTextControls() {
         // Ukryj panel
         m_settingsDock->setSettingsWidget(nullptr);
     });
-    // Anuluj
-    auto cancelBtn = new QPushButton(QString::fromUtf8("Anuluj"), panel);
+    // Usuń
+    auto cancelBtn = new QPushButton(QString::fromUtf8("Usuń"), panel);
     lay->addWidget(cancelBtn);
     connect(cancelBtn, &QPushButton::clicked, this, [this]() {
         // Anuluj wstawianie lub edycję
