@@ -292,6 +292,7 @@ void CalloutItem::updateTextLayout() {
         m_rect.setHeight(std::max(docSize.height() + kPadding * 2.0, 40.0));
     }
 
+    ensureAnchorBelowBubble();
     update();
 }
 
