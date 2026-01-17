@@ -461,6 +461,7 @@ void CanvasWidget::startEditExistingText(int index) {
         t.text = m_textEdit ? m_textEdit->toPlainText() : t.text;
         const double marginX = 8.0;
         const double marginY = 6.0;
+        // Determine document size and convert to world units including margins.
         QSizeF docSize = m_textEdit ? m_textEdit->document()->size() : QSizeF();
         double w_m = 0.0;
         double h_m = 0.0;
@@ -468,14 +469,38 @@ void CanvasWidget::startEditExistingText(int index) {
             w_m = (docSize.width() + marginX * 2) / (m_pixelsPerMeter * m_zoom);
             h_m = (docSize.height() + marginY * 2) / (m_pixelsPerMeter * m_zoom);
         }
-        double x_m = t.boundingRect.left();
-        double y_m = t.boundingRect.top();
-        if (t.boundingRect.isNull()) {
+        // Use a fixed pixel gap for the arrow tail and convert it to world units.
+        const double tailGapPx = 12.0;
+        double gapWorld = (m_pixelsPerMeter * m_zoom != 0.0)
+            ? tailGapPx / (m_pixelsPerMeter * m_zoom)
+            : 0.0;
+        // Compute new bubble position relative to the anchor.
+        double x_m = 0.0;
+        double y_m = 0.0;
+        switch (t.anchor) {
+        case CalloutAnchor::Bottom:
+            // Bubble above anchor
             x_m = t.pos.x() - w_m / 2.0;
-            y_m = t.pos.y() - h_m;
+            y_m = t.pos.y() - gapWorld - h_m;
+            break;
+        case CalloutAnchor::Top:
+            // Bubble below anchor
+            x_m = t.pos.x() - w_m / 2.0;
+            y_m = t.pos.y() + gapWorld;
+            break;
+        case CalloutAnchor::Left:
+            // Bubble to the right
+            x_m = t.pos.x() + gapWorld;
+            y_m = t.pos.y() - h_m / 2.0;
+            break;
+        case CalloutAnchor::Right:
+            // Bubble to the left
+            x_m = t.pos.x() - gapWorld - w_m;
+            y_m = t.pos.y() - h_m / 2.0;
+            break;
         }
         t.boundingRect = QRectF(x_m, y_m, w_m, h_m);
-        // Przenieś pole edycyjne do nowej pozycji i rozmiaru
+        // Move the editor widget on screen to follow the bubble's top-left.
         QPointF tl = toScreen(t.boundingRect.topLeft());
         int width2 = std::max(40, (int)std::round(docSize.width() + marginX * 2));
         int height2 = std::max(20, (int)std::round(docSize.height() + marginY * 2));
