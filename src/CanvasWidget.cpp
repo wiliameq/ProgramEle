@@ -434,8 +434,7 @@ void CanvasWidget::startEditExistingText(int index) {
     m_textEdit = new QTextEdit(this);
     m_textEdit->setFrameStyle(QFrame::NoFrame);
     m_textEdit->setAcceptRichText(false);
-    m_textEdit->installEventFilter(this);
-    m_textEdit->setAttribute(Qt::WA_TransparentForMouseEvents, true);
+        m_textEdit->installEventFilter(this);
     // Ustaw kolor tekstu i czcionkę zgodnie z istniejącym elementem
     QPalette pal = m_textEdit->palette();
     pal.setColor(QPalette::Text, ti.color);
@@ -1235,7 +1234,6 @@ void CanvasWidget::mousePressEvent(QMouseEvent* ev) {
     m_textEdit->setFrameStyle(QFrame::NoFrame);
     m_textEdit->setAcceptRichText(false);
     m_textEdit->installEventFilter(this);
-    m_textEdit->setAttribute(Qt::WA_TransparentForMouseEvents, true);
         // Ustaw kolor i czcionkę dla edycji
         QPalette pal = m_textEdit->palette();
         pal.setColor(QPalette::Text, m_tempTextItem.color);
@@ -1541,7 +1539,6 @@ void CanvasWidget::startTextEdit(const QPointF &worldPos, const QPointF &screenP
     m_textEdit->setFrameStyle(QFrame::NoFrame);
     m_textEdit->setAcceptRichText(false);
     m_textEdit->installEventFilter(this);
-    m_textEdit->setAttribute(Qt::WA_TransparentForMouseEvents, true);
     // Zastosuj kolor tekstu poprzez paletę i CSS (CSS zapewnia bardziej
     // niezawodne ustawienie koloru w niektórych motywach)
     QPalette pal = m_textEdit->palette();
@@ -1865,14 +1862,7 @@ bool CanvasWidget::eventFilter(QObject* obj, QEvent* event) {
         auto *keyEv = static_cast<QKeyEvent*>(event);
         if (keyEv->key() == Qt::Key_Return || keyEv->key() == Qt::Key_Enter) {
             if (m_hasTempTextItem) {
-                QString txt = m_textEdit->toPlainText().trimmed();
-                m_tempTextItem.text = txt;
-                updateTempBoundingRect();
-                m_isTempBubblePinned = true;
-                QTextEdit* edit = m_textEdit;
-                m_textEdit = nullptr;
-                edit->deleteLater();
-                update();
+                commitTempTextItem();
                 return true;
             }
             if (m_editingTextIndex >= 0) {
