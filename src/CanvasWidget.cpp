@@ -43,6 +43,15 @@ CanvasWidget::ResizeHandle hitResizeHandle(const QRectF &rect, const QPointF &po
     }
     return CanvasWidget::ResizeHandle::None;
 }
+
+CalloutAnchor anchorFromPosition(const QRectF &bubbleRect, const QPointF &anchorPos) {
+    QPointF center = bubbleRect.center();
+    QPointF delta = anchorPos - center;
+    if (std::abs(delta.x()) >= std::abs(delta.y())) {
+        return (delta.x() < 0.0) ? CalloutAnchor::Left : CalloutAnchor::Right;
+    }
+    return (delta.y() < 0.0) ? CalloutAnchor::Top : CalloutAnchor::Bottom;
+}
 } // namespace
 
 namespace {
@@ -498,6 +507,8 @@ void CanvasWidget::startEditExistingText(int index) {
     m_textEdit->setAcceptRichText(false);
     m_textEdit->setAutoFillBackground(false);
     m_textEdit->setAttribute(Qt::WA_TranslucentBackground);
+    m_textEdit->document()->setDocumentMargin(0.0);
+    m_textEdit->setContentsMargins(0, 0, 0, 0);
     m_textEdit->installEventFilter(this);
     // Ustaw kolor tekstu i czcionkę zgodnie z istniejącym elementem
     QPalette pal = m_textEdit->palette();
@@ -1303,6 +1314,8 @@ void CanvasWidget::mousePressEvent(QMouseEvent* ev) {
         m_textEdit->setAcceptRichText(false);
         m_textEdit->setAutoFillBackground(false);
         m_textEdit->setAttribute(Qt::WA_TranslucentBackground);
+        m_textEdit->document()->setDocumentMargin(0.0);
+        m_textEdit->setContentsMargins(0, 0, 0, 0);
         m_textEdit->installEventFilter(this);
         // Ustaw kolor i czcionkę dla edycji
         QPalette pal = m_textEdit->palette();
@@ -1526,6 +1539,7 @@ void CanvasWidget::mouseMoveEvent(QMouseEvent* ev) {
         if (m_isDraggingTempAnchor) {
             // Zmień pozycję kotwicy bez przesuwania dymka
             QPointF wpos = toWorld(ev->localPos());
+            m_tempTextItem.anchor = anchorFromPosition(m_tempTextItem.boundingRect, wpos);
             double gapWorld = (m_pixelsPerMeter * m_zoom != 0.0)
                 ? 12.0 / (m_pixelsPerMeter * m_zoom)
                 : 0.0;
@@ -1558,6 +1572,7 @@ void CanvasWidget::mouseMoveEvent(QMouseEvent* ev) {
             // Przeciąganie kotwicy bez przesuwania dymka
             QPointF wpos = toWorld(ev->localPos());
             TextItem &ti = m_textItems[m_selectedTextIndex];
+            ti.anchor = anchorFromPosition(ti.boundingRect, wpos);
             double gapWorld = (m_pixelsPerMeter * m_zoom != 0.0)
                 ? 12.0 / (m_pixelsPerMeter * m_zoom)
                 : 0.0;
@@ -1635,6 +1650,8 @@ void CanvasWidget::startTextEdit(const QPointF &worldPos, const QPointF &screenP
     m_textEdit->setAcceptRichText(false);
     m_textEdit->setAutoFillBackground(false);
     m_textEdit->setAttribute(Qt::WA_TranslucentBackground);
+    m_textEdit->document()->setDocumentMargin(0.0);
+    m_textEdit->setContentsMargins(0, 0, 0, 0);
     m_textEdit->installEventFilter(this);
     // Zastosuj kolor tekstu poprzez paletę i CSS (CSS zapewnia bardziej
     // niezawodne ustawienie koloru w niektórych motywach)
@@ -1946,6 +1963,9 @@ bool CanvasWidget::eventFilter(QObject* obj, QEvent* event) {
     if (obj == m_textEdit && event->type() == QEvent::KeyPress) {
         auto *keyEv = static_cast<QKeyEvent*>(event);
         if (keyEv->key() == Qt::Key_Return || keyEv->key() == Qt::Key_Enter) {
+            if (keyEv->modifiers().testFlag(Qt::ShiftModifier)) {
+                return false;
+            }
             if (m_hasTempTextItem) {
                 commitTempTextItem();
                 return true;
