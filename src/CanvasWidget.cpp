@@ -46,13 +46,59 @@ CanvasWidget::ResizeHandle hitResizeHandle(const QRectF &rect, const QPointF &po
 } // namespace
 
 namespace {
-QPointF clampAnchorBelowBubble(const QRectF &bubbleRect, const QPointF &anchorPos, double gapWorld) {
+QPointF clampAnchorOutsideBubble(const QRectF &bubbleRect, const QPointF &anchorPos,
+                                 CalloutAnchor anchor, double gapWorld) {
     QPointF clamped = anchorPos;
-    double minY = bubbleRect.bottom() + gapWorld;
-    if (clamped.y() < minY) {
-        clamped.setY(minY);
+    switch (anchor) {
+    case CalloutAnchor::Bottom: {
+        double minY = bubbleRect.bottom() + gapWorld;
+        if (clamped.y() < minY) clamped.setY(minY);
+        break;
+    }
+    case CalloutAnchor::Top: {
+        double maxY = bubbleRect.top() - gapWorld;
+        if (clamped.y() > maxY) clamped.setY(maxY);
+        break;
+    }
+    case CalloutAnchor::Left: {
+        double maxX = bubbleRect.left() - gapWorld;
+        if (clamped.x() > maxX) clamped.setX(maxX);
+        break;
+    }
+    case CalloutAnchor::Right: {
+        double minX = bubbleRect.right() + gapWorld;
+        if (clamped.x() < minX) clamped.setX(minX);
+        break;
+    }
     }
     return clamped;
+}
+
+QRectF bubbleRectForAnchor(const QPointF &anchorPos, const QSizeF &sizeWorld,
+                           CalloutAnchor anchor, double gapWorld) {
+    double w = sizeWorld.width();
+    double h = sizeWorld.height();
+    double x_m = 0.0;
+    double y_m = 0.0;
+    switch (anchor) {
+    case CalloutAnchor::Bottom:
+        x_m = anchorPos.x() - w / 2.0;
+        y_m = anchorPos.y() - gapWorld - h;
+        break;
+    case CalloutAnchor::Top:
+        x_m = anchorPos.x() - w / 2.0;
+        y_m = anchorPos.y() + gapWorld;
+        break;
+    case CalloutAnchor::Left:
+        x_m = anchorPos.x() + gapWorld;
+        y_m = anchorPos.y() - h / 2.0;
+        break;
+    case CalloutAnchor::Right:
+        x_m = anchorPos.x() - gapWorld - w;
+        y_m = anchorPos.y() - h / 2.0;
+        break;
+    }
+    return QRectF(x_m, y_m, w, h);
 }
 } // namespace
 
@@ -319,11 +365,25 @@ void CanvasWidget::setSelectedTextFont(const QFont &f) {
     QFontMetrics fm(f);
     int textW = fm.horizontalAdvance(text);
     int textH = fm.height();
-    double w_m = textW / (m_pixelsPerMeter * m_zoom);
-    double h_m = textH / (m_pixelsPerMeter * m_zoom);
-    // Zachowaj bieżącą pozycję (punkt bazowy tekstu)
-    QPointF pos = m_textItems[m_selectedTextIndex].pos;
-    m_textItems[m_selectedTextIndex].boundingRect = QRectF(pos.x(), pos.y() - h_m, w_m, h_m);
+    double w_m = 0.0;
+    double h_m = 0.0;
+    if (m_pixelsPerMeter * m_zoom != 0.0) {
+        w_m = textW / (m_pixelsPerMeter * m_zoom);
+        h_m = textH / (m_pixelsPerMeter * m_zoom);
+    }
+    TextItem &ti = m_textItems[m_selectedTextIndex];
+    if (!ti.boundingRect.isNull()) {
+        ti.boundingRect.setSize(QSizeF(w_m, h_m));
+    } else {
+        const double gapWorld = (m_pixelsPerMeter * m_zoom != 0.0)
+            ? 12.0 / (m_pixelsPerMeter * m_zoom)
+            : 0.0;
+        ti.boundingRect = bubbleRectForAnchor(ti.pos, QSizeF(w_m, h_m), ti.anchor, gapWorld);
+    }
+    const double gapWorld = (m_pixelsPerMeter * m_zoom != 0.0)
+        ? 12.0 / (m_pixelsPerMeter * m_zoom)
+        : 0.0;
+    ti.pos = clampAnchorOutsideBubble(ti.boundingRect, ti.pos, ti.anchor, gapWorld);
     update();
 }
 
@@ -359,10 +419,18 @@ void CanvasWidget::updateSelectedText(const QString &text, const QColor &color, 
     double x_m = ti.boundingRect.left();
     double y_m = ti.boundingRect.top();
     if (ti.boundingRect.isNull()) {
-        x_m = ti.pos.x() - w_m / 2.0;
-        y_m = ti.pos.y() - h_m;
+        const double gapWorld = (m_pixelsPerMeter * m_zoom != 0.0)
+            ? 12.0 / (m_pixelsPerMeter * m_zoom)
+            : 0.0;
+        QRectF rect = bubbleRectForAnchor(ti.pos, QSizeF(w_m, h_m), ti.anchor, gapWorld);
+        x_m = rect.left();
+        y_m = rect.top();
     }
     ti.boundingRect = QRectF(x_m, y_m, w_m, h_m);
+    const double gapWorld = (m_pixelsPerMeter * m_zoom != 0.0)
+        ? 12.0 / (m_pixelsPerMeter * m_zoom)
+        : 0.0;
+    ti.pos = clampAnchorOutsideBubble(ti.boundingRect, ti.pos, ti.anchor, gapWorld);
     update();
 }
 
@@ -388,32 +456,26 @@ void CanvasWidget::setSelectedTextAnchor(CalloutAnchor a) {
         return;
     }
     ti.anchor = a;
-    // Oblicz wymiary tekstu w pikselach na podstawie bieżącej czcionki
-    QFontMetrics fm(ti.font);
-    int textW = fm.horizontalAdvance(ti.text);
-    int textH = fm.height();
-    double w_m = textW / (m_pixelsPerMeter * m_zoom);
-    double h_m = textH / (m_pixelsPerMeter * m_zoom);
-    double x_m, y_m;
-    switch (a) {
-    case CalloutAnchor::Bottom:
-        x_m = ti.pos.x() - w_m / 2.0;
-        y_m = ti.pos.y() - h_m;
-        break;
-    case CalloutAnchor::Top:
-        x_m = ti.pos.x() - w_m / 2.0;
-        y_m = ti.pos.y();
-        break;
-    case CalloutAnchor::Left:
-        x_m = ti.pos.x();
-        y_m = ti.pos.y() - h_m / 2.0;
-        break;
-    case CalloutAnchor::Right:
-        x_m = ti.pos.x() - w_m;
-        y_m = ti.pos.y() - h_m / 2.0;
-        break;
+    if (ti.boundingRect.isNull()) {
+        // Oblicz wymiary tekstu w pikselach na podstawie bieżącej czcionki
+        QFontMetrics fm(ti.font);
+        int textW = fm.horizontalAdvance(ti.text);
+        int textH = fm.height();
+        double w_m = 0.0;
+        double h_m = 0.0;
+        if (m_pixelsPerMeter * m_zoom != 0.0) {
+            w_m = textW / (m_pixelsPerMeter * m_zoom);
+            h_m = textH / (m_pixelsPerMeter * m_zoom);
+        }
+        const double gapWorld = (m_pixelsPerMeter * m_zoom != 0.0)
+            ? 12.0 / (m_pixelsPerMeter * m_zoom)
+            : 0.0;
+        ti.boundingRect = bubbleRectForAnchor(ti.pos, QSizeF(w_m, h_m), ti.anchor, gapWorld);
     }
-    ti.boundingRect = QRectF(x_m, y_m, w_m, h_m);
+    const double gapWorld = (m_pixelsPerMeter * m_zoom != 0.0)
+        ? 12.0 / (m_pixelsPerMeter * m_zoom)
+        : 0.0;
+    ti.pos = clampAnchorOutsideBubble(ti.boundingRect, ti.pos, ti.anchor, gapWorld);
     update();
 }
 
@@ -434,12 +496,15 @@ void CanvasWidget::startEditExistingText(int index) {
     m_textEdit = new QTextEdit(this);
     m_textEdit->setFrameStyle(QFrame::NoFrame);
     m_textEdit->setAcceptRichText(false);
-        m_textEdit->installEventFilter(this);
+    m_textEdit->setAutoFillBackground(false);
+    m_textEdit->setAttribute(Qt::WA_TranslucentBackground);
+    m_textEdit->installEventFilter(this);
     // Ustaw kolor tekstu i czcionkę zgodnie z istniejącym elementem
     QPalette pal = m_textEdit->palette();
     pal.setColor(QPalette::Text, ti.color);
+    pal.setColor(QPalette::Base, Qt::transparent);
     m_textEdit->setPalette(pal);
-    m_textEdit->setStyleSheet(QString("color: %1;").arg(ti.color.name()));
+    m_textEdit->setStyleSheet(QString("color: %1; background: transparent;").arg(ti.color.name()));
     m_textEdit->setFont(ti.font);
     // Ustaw istniejący tekst
     m_textEdit->setPlainText(ti.text);
@@ -1226,19 +1291,25 @@ void CanvasWidget::mousePressEvent(QMouseEvent* ev) {
             // Nie powinno mieć miejsca, ale dla pewności usuń stare pole
             cancelTextEdit();
         }
-        if (m_tempTextItem.anchor == CalloutAnchor::Bottom && m_pixelsPerMeter * m_zoom != 0.0) {
+        if (m_pixelsPerMeter * m_zoom != 0.0) {
             double gapWorld = 12.0 / (m_pixelsPerMeter * m_zoom);
-            m_tempTextItem.pos = clampAnchorBelowBubble(m_tempTextItem.boundingRect, m_tempTextItem.pos, gapWorld);
+            m_tempTextItem.pos = clampAnchorOutsideBubble(m_tempTextItem.boundingRect,
+                                                          m_tempTextItem.pos,
+                                                          m_tempTextItem.anchor,
+                                                          gapWorld);
         }
         m_textEdit = new QTextEdit(this);
-    m_textEdit->setFrameStyle(QFrame::NoFrame);
-    m_textEdit->setAcceptRichText(false);
-    m_textEdit->installEventFilter(this);
+        m_textEdit->setFrameStyle(QFrame::NoFrame);
+        m_textEdit->setAcceptRichText(false);
+        m_textEdit->setAutoFillBackground(false);
+        m_textEdit->setAttribute(Qt::WA_TranslucentBackground);
+        m_textEdit->installEventFilter(this);
         // Ustaw kolor i czcionkę dla edycji
         QPalette pal = m_textEdit->palette();
         pal.setColor(QPalette::Text, m_tempTextItem.color);
+        pal.setColor(QPalette::Base, Qt::transparent);
         m_textEdit->setPalette(pal);
-        m_textEdit->setStyleSheet(QString("color: %1;").arg(m_tempTextItem.color.name()));
+        m_textEdit->setStyleSheet(QString("color: %1; background: transparent;").arg(m_tempTextItem.color.name()));
         m_textEdit->setFont(m_tempTextItem.font);
         m_textEdit->setPlainText(QString());
         // Dopasuj rozmiar pola do tekstu i ustaw je w odpowiedniej pozycji
@@ -1380,6 +1451,13 @@ void CanvasWidget::mouseMoveEvent(QMouseEvent* ev) {
         QPointF bottomRightWorld = toWorld(rect.bottomRight());
         m_tempTextItem.boundingRect = QRectF(topLeftWorld, bottomRightWorld).normalized();
         m_isTempBubblePinned = true;
+        if (m_pixelsPerMeter * m_zoom != 0.0) {
+            double gapWorld = 12.0 / (m_pixelsPerMeter * m_zoom);
+            m_tempTextItem.pos = clampAnchorOutsideBubble(m_tempTextItem.boundingRect,
+                                                          m_tempTextItem.pos,
+                                                          m_tempTextItem.anchor,
+                                                          gapWorld);
+        }
         repositionTempTextEdit();
         update();
         return;
@@ -1411,6 +1489,11 @@ void CanvasWidget::mouseMoveEvent(QMouseEvent* ev) {
         QPointF topLeftWorld = toWorld(rect.topLeft());
         QPointF bottomRightWorld = toWorld(rect.bottomRight());
         m_textItems[m_selectedTextIndex].boundingRect = QRectF(topLeftWorld, bottomRightWorld).normalized();
+        if (m_pixelsPerMeter * m_zoom != 0.0) {
+            double gapWorld = 12.0 / (m_pixelsPerMeter * m_zoom);
+            TextItem &ti = m_textItems[m_selectedTextIndex];
+            ti.pos = clampAnchorOutsideBubble(ti.boundingRect, ti.pos, ti.anchor, gapWorld);
+        }
         if (m_textEdit && m_editingTextIndex == m_selectedTextIndex) {
             m_textEdit->move(rect.topLeft().toPoint());
             m_textEdit->resize(std::max(40, (int)std::round(rect.width())),
@@ -1422,11 +1505,19 @@ void CanvasWidget::mouseMoveEvent(QMouseEvent* ev) {
     // Przeciąganie tymczasowego dymka w trybie InsertText
     if (m_mode == ToolMode::InsertText && m_hasTempTextItem) {
         if (m_isDraggingTempBubble) {
-            // Przesuwamy boundingRect względem kotwicy; kotwica pozostaje stała
+            // Przesuwamy boundingRect względem kotwicy i korygujemy kotwicę
+            // tak, aby pozostała poza dymkiem.
             QPointF wpos = toWorld(ev->localPos());
             QPointF newTopLeft = wpos - m_tempDragOffset;
             QPointF delta = newTopLeft - m_tempTextItem.boundingRect.topLeft();
             m_tempTextItem.boundingRect.translate(delta.x(), delta.y());
+            if (m_pixelsPerMeter * m_zoom != 0.0) {
+                double gapWorld = 12.0 / (m_pixelsPerMeter * m_zoom);
+                m_tempTextItem.pos = clampAnchorOutsideBubble(m_tempTextItem.boundingRect,
+                                                              m_tempTextItem.pos,
+                                                              m_tempTextItem.anchor,
+                                                              gapWorld);
+            }
             // Przesuń pole edycji
             repositionTempTextEdit();
             update();
@@ -1435,12 +1526,13 @@ void CanvasWidget::mouseMoveEvent(QMouseEvent* ev) {
         if (m_isDraggingTempAnchor) {
             // Zmień pozycję kotwicy bez przesuwania dymka
             QPointF wpos = toWorld(ev->localPos());
-            if (m_tempTextItem.anchor == CalloutAnchor::Bottom && m_pixelsPerMeter * m_zoom != 0.0) {
-                double gapWorld = 12.0 / (m_pixelsPerMeter * m_zoom);
-                m_tempTextItem.pos = clampAnchorBelowBubble(m_tempTextItem.boundingRect, wpos, gapWorld);
-            } else {
-                m_tempTextItem.pos = wpos;
-            }
+            double gapWorld = (m_pixelsPerMeter * m_zoom != 0.0)
+                ? 12.0 / (m_pixelsPerMeter * m_zoom)
+                : 0.0;
+            m_tempTextItem.pos = clampAnchorOutsideBubble(m_tempTextItem.boundingRect,
+                                                          wpos,
+                                                          m_tempTextItem.anchor,
+                                                          gapWorld);
             update();
             return;
         }
@@ -1448,12 +1540,17 @@ void CanvasWidget::mouseMoveEvent(QMouseEvent* ev) {
     // Jeśli przeciągamy zaznaczony tekst w trybie zaznaczania lub jego kotwicę
     if (m_mode == ToolMode::Select && hasSelectedText()) {
         if (m_isDraggingSelectedText) {
-            // Przeciąganie całego dymka – przesuwamy tylko boundingRect
+            // Przeciąganie całego dymka – przesuwamy boundingRect i pilnujemy
+            // aby kotwica nie znalazła się wewnątrz dymka.
             QPointF wpos = toWorld(ev->localPos());
             TextItem &ti = m_textItems[m_selectedTextIndex];
             QPointF newTopLeft = wpos - m_dragStartOffset;
             QPointF delta = newTopLeft - ti.boundingRect.topLeft();
             ti.boundingRect.translate(delta.x(), delta.y());
+            if (m_pixelsPerMeter * m_zoom != 0.0) {
+                double gapWorld = 12.0 / (m_pixelsPerMeter * m_zoom);
+                ti.pos = clampAnchorOutsideBubble(ti.boundingRect, ti.pos, ti.anchor, gapWorld);
+            }
             update();
             return;
         }
@@ -1461,12 +1558,10 @@ void CanvasWidget::mouseMoveEvent(QMouseEvent* ev) {
             // Przeciąganie kotwicy bez przesuwania dymka
             QPointF wpos = toWorld(ev->localPos());
             TextItem &ti = m_textItems[m_selectedTextIndex];
-            if (ti.anchor == CalloutAnchor::Bottom && m_pixelsPerMeter * m_zoom != 0.0) {
-                double gapWorld = 12.0 / (m_pixelsPerMeter * m_zoom);
-                ti.pos = clampAnchorBelowBubble(ti.boundingRect, wpos, gapWorld);
-            } else {
-                ti.pos = wpos;
-            }
+            double gapWorld = (m_pixelsPerMeter * m_zoom != 0.0)
+                ? 12.0 / (m_pixelsPerMeter * m_zoom)
+                : 0.0;
+            ti.pos = clampAnchorOutsideBubble(ti.boundingRect, wpos, ti.anchor, gapWorld);
             update();
             return;
         }
@@ -1538,13 +1633,16 @@ void CanvasWidget::startTextEdit(const QPointF &worldPos, const QPointF &screenP
     m_textEdit = new QTextEdit(this);
     m_textEdit->setFrameStyle(QFrame::NoFrame);
     m_textEdit->setAcceptRichText(false);
+    m_textEdit->setAutoFillBackground(false);
+    m_textEdit->setAttribute(Qt::WA_TranslucentBackground);
     m_textEdit->installEventFilter(this);
     // Zastosuj kolor tekstu poprzez paletę i CSS (CSS zapewnia bardziej
     // niezawodne ustawienie koloru w niektórych motywach)
     QPalette pal = m_textEdit->palette();
     pal.setColor(QPalette::Text, m_insertTextColor);
+    pal.setColor(QPalette::Base, Qt::transparent);
     m_textEdit->setPalette(pal);
-    m_textEdit->setStyleSheet(QString("color: %1;").arg(m_insertTextColor.name()));
+    m_textEdit->setStyleSheet(QString("color: %1; background: transparent;").arg(m_insertTextColor.name()));
     // Ustaw czcionkę
     m_textEdit->setFont(m_insertTextFont);
     // Pusty tekst początkowy
@@ -1579,10 +1677,12 @@ void CanvasWidget::commitTextEdit() {
     // Jeżeli wstawiany jest tymczasowy dymek (m_hasTempTextItem), to
     // commitTempTextItem() obsłuży finalizację.  Wywołaj je i zakończ.
     if (m_hasTempTextItem) {
-        if (!text.isEmpty()) {
-            // Ustaw treść tymczasowego dymka i finalizuj
-            m_tempTextItem.text = text;
+        if (text.isEmpty()) {
+            cancelTempTextItem();
+            return;
         }
+        // Ustaw treść tymczasowego dymka i finalizuj
+        m_tempTextItem.text = text;
         commitTempTextItem();
         return;
     }
@@ -1663,37 +1763,22 @@ void CanvasWidget::updateTempBoundingRect() {
         double gapWorld = (m_pixelsPerMeter * m_zoom != 0.0)
             ? tailGapPx / (m_pixelsPerMeter * m_zoom)
             : 0.0;
-        switch (m_tempTextItem.anchor) {
-        case CalloutAnchor::Bottom:
-            x_m = m_tempTextItem.pos.x() - w_m / 2.0;
-            y_m = m_tempTextItem.pos.y() - gapWorld - h_m;
-            break;
-        case CalloutAnchor::Top:
-            x_m = m_tempTextItem.pos.x() - w_m / 2.0;
-            y_m = m_tempTextItem.pos.y() + gapWorld;
-            break;
-        case CalloutAnchor::Left:
-            x_m = m_tempTextItem.pos.x() + gapWorld;
-            y_m = m_tempTextItem.pos.y() - h_m / 2.0;
-            break;
-        case CalloutAnchor::Right:
-            x_m = m_tempTextItem.pos.x() - gapWorld - w_m;
-            y_m = m_tempTextItem.pos.y() - h_m / 2.0;
-            break;
-        }
+        QRectF rect = bubbleRectForAnchor(m_tempTextItem.pos, QSizeF(w_m, h_m),
+                                          m_tempTextItem.anchor, gapWorld);
+        x_m = rect.left();
+        y_m = rect.top();
     }
     QRectF rect(x_m, y_m, w_m, h_m);
-    if (m_isTempBubblePinned && m_tempTextItem.anchor == CalloutAnchor::Bottom) {
+    m_tempTextItem.boundingRect = rect;
+    if (m_isTempBubblePinned) {
         double gapWorld = (m_pixelsPerMeter * m_zoom != 0.0)
             ? tailGapPx / (m_pixelsPerMeter * m_zoom)
             : 0.0;
-        double bubbleBottom = rect.bottom();
-        if (bubbleBottom >= m_tempTextItem.pos.y() - gapWorld) {
-            double shift = bubbleBottom - (m_tempTextItem.pos.y() - gapWorld);
-            rect.translate(0.0, -shift);
-        }
+        m_tempTextItem.pos = clampAnchorOutsideBubble(m_tempTextItem.boundingRect,
+                                                      m_tempTextItem.pos,
+                                                      m_tempTextItem.anchor,
+                                                      gapWorld);
     }
-    m_tempTextItem.boundingRect = rect;
 }
 
 void CanvasWidget::repositionTempTextEdit() {

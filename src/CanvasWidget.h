@@ -694,8 +694,9 @@ public:
             if (m_textEdit) {
                 QPalette pal = m_textEdit->palette();
                 pal.setColor(QPalette::Text, c);
+                pal.setColor(QPalette::Base, Qt::transparent);
                 m_textEdit->setPalette(pal);
-                m_textEdit->setStyleSheet(QString("color: %1;").arg(c.name()));
+                m_textEdit->setStyleSheet(QString("color: %1; background: transparent;").arg(c.name()));
             }
             update();
         }
