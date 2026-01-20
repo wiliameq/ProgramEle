@@ -18,7 +18,7 @@ jobs:
       - name: Install Qt6 and build tools
         run: |
           sudo apt update
-          sudo apt install -y qt6-base-dev qt6-base-dev-tools cmake ninja-build g++
+          sudo apt install -y qt6-base-dev qt6-base-dev-tools qt6-pdf-dev cmake ninja-build g++
 
       - name: Configure project with CMake
         run: |
