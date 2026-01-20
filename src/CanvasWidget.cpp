@@ -44,6 +44,14 @@ CanvasWidget::ResizeHandle hitResizeHandle(const QRectF &rect, const QPointF &po
     return CanvasWidget::ResizeHandle::None;
 }
 
+double safePixelsPerMeter(double pixelsPerMeter, double zoom) {
+    double value = pixelsPerMeter * zoom;
+    if (value <= 0.0) {
+        return 1.0;
+    }
+    return value;
+}
+
 CalloutAnchor anchorFromPosition(const QRectF &bubbleRect, const QPointF &anchorPos) {
     QPointF center = bubbleRect.center();
     QPointF delta = anchorPos - center;
@@ -369,24 +377,18 @@ void CanvasWidget::setSelectedTextFont(const QFont &f) {
     QFontMetrics fm(f);
     int textW = fm.horizontalAdvance(text);
     int textH = fm.height();
-    double w_m = 0.0;
-    double h_m = 0.0;
-    if (m_pixelsPerMeter * m_zoom != 0.0) {
-        w_m = textW / (m_pixelsPerMeter * m_zoom);
-        h_m = textH / (m_pixelsPerMeter * m_zoom);
-    }
+    double pixPerM = m_pixelsPerMeter * m_zoom;
+    if (pixPerM <= 0.0) pixPerM = 1.0;
+    double w_m = textW / pixPerM;
+    double h_m = textH / pixPerM;
     TextItem &ti = m_textItems[m_selectedTextIndex];
     if (!ti.boundingRect.isNull()) {
         ti.boundingRect.setSize(QSizeF(w_m, h_m));
     } else {
-        const double gapWorld = (m_pixelsPerMeter * m_zoom != 0.0)
-            ? 12.0 / (m_pixelsPerMeter * m_zoom)
-            : 0.0;
+        const double gapWorld = 12.0 / pixPerM;
         ti.boundingRect = bubbleRectForAnchor(ti.pos, QSizeF(w_m, h_m), ti.anchor, gapWorld);
     }
-    const double gapWorld = (m_pixelsPerMeter * m_zoom != 0.0)
-        ? 12.0 / (m_pixelsPerMeter * m_zoom)
-        : 0.0;
+    const double gapWorld = 12.0 / pixPerM;
     ti.pos = clampAnchorOutsideBubble(ti.boundingRect, ti.pos, ti.anchor, gapWorld);
     update();
 }
@@ -414,26 +416,20 @@ void CanvasWidget::updateSelectedText(const QString &text, const QColor &color, 
     }
     QRect textBounds = fm.boundingRect(0, 0, (int)std::ceil(widthPx), 10000,
                                        Qt::TextWordWrap, trimmed);
-    double w_m = 0.0;
-    double h_m = 0.0;
-    if (m_pixelsPerMeter * m_zoom != 0.0) {
-        w_m = (textBounds.width() + marginX * 2) / (m_pixelsPerMeter * m_zoom);
-        h_m = (textBounds.height() + marginY * 2) / (m_pixelsPerMeter * m_zoom);
-    }
+    double pixPerM = m_pixelsPerMeter * m_zoom;
+    if (pixPerM <= 0.0) pixPerM = 1.0;
+    double w_m = (textBounds.width() + marginX * 2) / pixPerM;
+    double h_m = (textBounds.height() + marginY * 2) / pixPerM;
     double x_m = ti.boundingRect.left();
     double y_m = ti.boundingRect.top();
     if (ti.boundingRect.isNull()) {
-        const double gapWorld = (m_pixelsPerMeter * m_zoom != 0.0)
-            ? 12.0 / (m_pixelsPerMeter * m_zoom)
-            : 0.0;
+        const double gapWorld = 12.0 / pixPerM;
         QRectF rect = bubbleRectForAnchor(ti.pos, QSizeF(w_m, h_m), ti.anchor, gapWorld);
         x_m = rect.left();
         y_m = rect.top();
     }
     ti.boundingRect = QRectF(x_m, y_m, w_m, h_m);
-    const double gapWorld = (m_pixelsPerMeter * m_zoom != 0.0)
-        ? 12.0 / (m_pixelsPerMeter * m_zoom)
-        : 0.0;
+    const double gapWorld = 12.0 / pixPerM;
     ti.pos = clampAnchorOutsideBubble(ti.boundingRect, ti.pos, ti.anchor, gapWorld);
     update();
 }
@@ -465,20 +461,16 @@ void CanvasWidget::setSelectedTextAnchor(CalloutAnchor a) {
         QFontMetrics fm(ti.font);
         int textW = fm.horizontalAdvance(ti.text);
         int textH = fm.height();
-        double w_m = 0.0;
-        double h_m = 0.0;
-        if (m_pixelsPerMeter * m_zoom != 0.0) {
-            w_m = textW / (m_pixelsPerMeter * m_zoom);
-            h_m = textH / (m_pixelsPerMeter * m_zoom);
-        }
-        const double gapWorld = (m_pixelsPerMeter * m_zoom != 0.0)
-            ? 12.0 / (m_pixelsPerMeter * m_zoom)
-            : 0.0;
+        double pixPerM = m_pixelsPerMeter * m_zoom;
+        if (pixPerM <= 0.0) pixPerM = 1.0;
+        double w_m = textW / pixPerM;
+        double h_m = textH / pixPerM;
+        const double gapWorld = 12.0 / pixPerM;
         ti.boundingRect = bubbleRectForAnchor(ti.pos, QSizeF(w_m, h_m), ti.anchor, gapWorld);
     }
-    const double gapWorld = (m_pixelsPerMeter * m_zoom != 0.0)
-        ? 12.0 / (m_pixelsPerMeter * m_zoom)
-        : 0.0;
+    double pixPerM = m_pixelsPerMeter * m_zoom;
+    if (pixPerM <= 0.0) pixPerM = 1.0;
+    const double gapWorld = 12.0 / pixPerM;
     ti.pos = clampAnchorOutsideBubble(ti.boundingRect, ti.pos, ti.anchor, gapWorld);
     update();
 }
@@ -533,17 +525,13 @@ void CanvasWidget::startEditExistingText(int index) {
         const double marginY = 6.0;
         // Determine document size and convert to world units including margins.
         QSizeF docSize = m_textEdit ? m_textEdit->document()->size() : QSizeF();
-        double w_m = 0.0;
-        double h_m = 0.0;
-        if (m_pixelsPerMeter * m_zoom != 0.0) {
-            w_m = (docSize.width() + marginX * 2) / (m_pixelsPerMeter * m_zoom);
-            h_m = (docSize.height() + marginY * 2) / (m_pixelsPerMeter * m_zoom);
-        }
+        double pixPerM = m_pixelsPerMeter * m_zoom;
+        if (pixPerM <= 0.0) pixPerM = 1.0;
+        double w_m = (docSize.width() + marginX * 2) / pixPerM;
+        double h_m = (docSize.height() + marginY * 2) / pixPerM;
         // Use a fixed pixel gap for the arrow tail and convert it to world units.
         const double tailGapPx = 12.0;
-        double gapWorld = (m_pixelsPerMeter * m_zoom != 0.0)
-            ? tailGapPx / (m_pixelsPerMeter * m_zoom)
-            : 0.0;
+        double gapWorld = tailGapPx / pixPerM;
         // Compute new bubble position relative to the anchor.
         double x_m = 0.0;
         double y_m = 0.0;
@@ -1030,7 +1018,7 @@ void CanvasWidget::drawOverlay(QPainter& p) {
                 p.drawLine(m_currentPts.back(), m_mouseWorld);
                 double dx = m_mouseWorld.x() - m_currentPts.back().x();
                 double dy = m_mouseWorld.y() - m_currentPts.back().y();
-                L += std::hypot(dx, dy) / m_pixelsPerMeter;
+                L += std::hypot(dx, dy) / safePixelsPerMeter(m_pixelsPerMeter, 1.0);
             }
             // Etykieta przy ostatnim punkcie (lub przy kursorku, jeśli jest)
             QPointF at = m_hasMouseWorld ? m_mouseWorld : m_currentPts.back();
@@ -1095,7 +1083,7 @@ void CanvasWidget::mousePressEvent(QMouseEvent* ev) {
         // z dymków.  Jeśli tak, ustaw zaznaczenie na ten dymek i rozpocznij
         // przeciąganie kotwicy.
         int anchorIdx = -1;
-        double threshold = 8.0 / (m_pixelsPerMeter * m_zoom);
+        double threshold = 8.0 / safePixelsPerMeter(m_pixelsPerMeter, m_zoom);
         for (int i = 0; i < (int)m_textItems.size(); ++i) {
             const auto &ti = m_textItems[i];
             double dx = wpos.x() - ti.pos.x();
@@ -1226,7 +1214,7 @@ void CanvasWidget::mousePressEvent(QMouseEvent* ev) {
                 return;
             }
             // Sprawdź, czy kliknięcie znajduje się w pobliżu kotwicy
-            double threshold = 8.0 / (m_pixelsPerMeter * m_zoom);
+            double threshold = 8.0 / safePixelsPerMeter(m_pixelsPerMeter, m_zoom);
             double dx = wpos.x() - m_tempTextItem.pos.x();
             double dy = wpos.y() - m_tempTextItem.pos.y();
             double dist = std::sqrt(dx*dx + dy*dy);
@@ -1709,12 +1697,10 @@ void CanvasWidget::commitTextEdit() {
             ti.text = text;
             // Kolor i czcionka nie są zmieniane tutaj – użytkownik
             // ustawia je z panelu poprzez setSelectedTextColor/Font.
-            double w_m = 0.0;
-            double h_m = 0.0;
-            if (m_pixelsPerMeter * m_zoom != 0.0) {
-                w_m = (docSize.width() + marginX * 2) / (m_pixelsPerMeter * m_zoom);
-                h_m = (docSize.height() + marginY * 2) / (m_pixelsPerMeter * m_zoom);
-            }
+            double pixPerM = m_pixelsPerMeter * m_zoom;
+            if (pixPerM <= 0.0) pixPerM = 1.0;
+            double w_m = (docSize.width() + marginX * 2) / pixPerM;
+            double h_m = (docSize.height() + marginY * 2) / pixPerM;
             double x_m = ti.boundingRect.left();
             double y_m = ti.boundingRect.top();
             if (ti.boundingRect.isNull()) {
@@ -2010,7 +1996,7 @@ double CanvasWidget::polyLengthMeters(const std::vector<QPointF>& pts) const {
         const double dy = pts[i].y() - pts[i-1].y();
         px += std::hypot(dx, dy);
     }
-    return px / m_pixelsPerMeter;
+    return px / safePixelsPerMeter(m_pixelsPerMeter, 1.0);
 }
 
 QString CanvasWidget::fmtLenInProjectUnit(double m) const {

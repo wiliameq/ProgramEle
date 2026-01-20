@@ -1,15 +1,15 @@
-#include <QGuiApplication>
+#include <QApplication>
 #include <QDebug>
 #include <QTimer>
 #include "CalloutItem.h"
 
-// Test logiczny CalloutItem w środowisku offscreen (QGuiApplication).
+// Test logiczny CalloutItem w środowisku offscreen (QApplication).
 
 int main(int argc, char *argv[]) {
     // Wymuszenie trybu offscreen
     qputenv("QT_QPA_PLATFORM", QByteArray("offscreen"));
 
-    QGuiApplication app(argc, argv);
+    QApplication app(argc, argv);
     qDebug() << "🧪 Running enhanced headless logic test (offscreen + GUI)...";
 
     try {
@@ -48,7 +48,7 @@ int main(int argc, char *argv[]) {
             QCoreApplication::exit(0);
         });
 
-        // Uruchom główną pętlę (potrzebna dla QGuiApplication)
+        // Uruchom główną pętlę (potrzebna dla QApplication)
         return app.exec();
     }
     catch (std::exception &e) {
