@@ -204,15 +204,18 @@ void CanvasWidget::insertPendingText(const QString& text) {
     // oblicz szerokość i wysokość dymka w pikselach
     qreal bubbleW = textW + 2 * marginX;
     qreal bubbleH = textH + 2 * marginY;
-    // zamień na jednostki świata
+    // Oblicz przelicznik pikseli na metry.  Jeśli skala nie została
+    // jeszcze zdefiniowana (pixelsPerMeter == 0), przyjmij tymczasowo 1, aby uniknąć dzielenia przez zero.
     qreal pixelsPerMeter = m_pixelsPerMeter * m_zoom;
+    if (pixelsPerMeter <= 0.0) pixelsPerMeter = 1.0;
     qreal bubbleWWorld = bubbleW / pixelsPerMeter;
     qreal bubbleHWorld = bubbleH / pixelsPerMeter;
     qreal gapWorld = tailGap / pixelsPerMeter;
-    // Określ orientację grotu w zależności od położenia (domyślnie w dół).
+    // Zawsze zaczynaj z grotem skierowanym w dół
     CalloutAnchor anchor = CalloutAnchor::Bottom;
     QRectF worldRect = bubbleRectForAnchor(m_textInsertPos, QSizeF(bubbleWWorld, bubbleHWorld),
                                            anchor, gapWorld);
+    // Ustaw kotwicę tak, aby nie znajdowała się wewnątrz dymka
     QPointF anchorPos = clampAnchorOutsideBubble(worldRect, m_textInsertPos, anchor, gapWorld);
     TextItem item;
     item.pos = anchorPos;
@@ -1773,10 +1776,10 @@ void CanvasWidget::updateTempBoundingRect() {
         h_m = std::max(h_m, m_tempTextItem.boundingRect.height());
     }
 
-    // Odstęp na grot w metrach
-    const double gapWorld = (m_pixelsPerMeter * m_zoom != 0.0)
-        ? tailGapPx / (m_pixelsPerMeter * m_zoom)
-        : 0.0;
+    // Odstęp na grot w metrach; jeśli skala nie została zdefiniowana, użyj zastępczej wartości, aby uniknąć dzielenia przez zero
+    double pixPerM = m_pixelsPerMeter * m_zoom;
+    if (pixPerM <= 0.0) pixPerM = 1.0;
+    const double gapWorld = tailGapPx / pixPerM;
 
     // Wyznacz nową ramkę dymka względem kotwicy za pomocą bubbleRectForAnchor()
     QRectF newRect = bubbleRectForAnchor(m_tempTextItem.pos,
@@ -1794,12 +1797,10 @@ void CanvasWidget::updateTempBoundingRect() {
     m_tempTextItem.boundingRect = newRect;
 
     // Kotwica musi zawsze pozostać poza dymkiem, niezależnie od przypięcia
-    if (m_pixelsPerMeter * m_zoom != 0.0) {
-        m_tempTextItem.pos = clampAnchorOutsideBubble(m_tempTextItem.boundingRect,
-                                                      m_tempTextItem.pos,
-                                                      m_tempTextItem.anchor,
-                                                      gapWorld);
-    }
+    m_tempTextItem.pos = clampAnchorOutsideBubble(m_tempTextItem.boundingRect,
+                                                  m_tempTextItem.pos,
+                                                  m_tempTextItem.anchor,
+                                                  gapWorld);
 }
 
 void CanvasWidget::repositionTempTextEdit() {
