@@ -192,7 +192,7 @@ void CanvasWidget::insertPendingText(const QString& text) {
     if (!m_hasTextInsertPos) return;
     QString trimmed = text.trimmed();
     if (trimmed.isEmpty()) return;
-    // Oblicz prostokąt dymka z marginesami i odstępem na grot, korzystając z
+    // Wyznacz wymiary ramki dymka z marginesami i odstępem na grot, korzystając z
     // bubbleRectForAnchor() i clampAnchorOutsideBubble(), aby grot nie trafiał do środka dymka.
     QFontMetricsF metrics(m_insertTextFont);
     qreal textW = metrics.horizontalAdvance(trimmed);
