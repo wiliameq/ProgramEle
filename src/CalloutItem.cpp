@@ -81,11 +81,6 @@ void CalloutItem::updateTextLayout() {
 
     qreal textWidth = qMax<qreal>(10.0, m_rect.width() - 2 * kPadding);
     m_textItem->setTextWidth(textWidth);
-    QSizeF textSize = m_textItem->document()->size();
-    qreal requiredHeight = textSize.height() + 2 * kPadding;
-    if (m_rect.height() < requiredHeight) {
-        m_rect.setHeight(requiredHeight);
-    }
     m_textItem->setPos(m_rect.left() + kPadding, m_rect.top() + kPadding);
     updateHandles();
     update();

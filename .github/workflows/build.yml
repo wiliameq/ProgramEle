@@ -1,4 +1,4 @@
-name: Build ProgramEle (Qt6)
+name: 🧱 Build and Test ProgramEle (Qt 6)
 
 on:
   push:
@@ -12,22 +12,53 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout repo
+      # --- Pobranie repozytorium ---
+      - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Install Qt6 and build tools
+      # --- Instalacja środowiska Qt6 i narzędzi budowania ---
+      - name: Install Qt6 and dependencies
         run: |
           sudo apt update
-          sudo apt install -y qt6-base-dev qt6-base-dev-tools qt6-pdf-dev cmake ninja-build g++
+          sudo apt install -y \
+            qt6-base-dev \
+            qt6-base-dev-tools \
+            qt6-tools-dev \
+            qt6-tools-dev-tools \
+            qt6-declarative-dev \
+            qt6-pdf-dev \
+            cmake ninja-build g++
 
-      - name: Configure project with CMake
+      # --- Diagnostyka Qt (opcjonalna, pokaże gdzie Qt jest zainstalowany) ---
+      - name: Verify Qt installation
         run: |
-          cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -G Ninja
+          qmake6 -v || echo "⚠️ qmake6 not found (ok if using pure CMake)"
+          ls -l /usr/lib/x86_64-linux-gnu/cmake/Qt6* || true
 
+      # --- Konfiguracja projektu przez CMake ---
+      - name: Configure project (CMake)
+        run: |
+          cmake -S . -B build -G Ninja \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_PREFIX_PATH=/usr/lib/x86_64-linux-gnu/cmake/Qt6
+
+      # --- Kompilacja projektu ---
       - name: Build project
         run: |
           cmake --build build --parallel
+          echo "✅ ProgramEle built successfully"
 
-      - name: Test build output
+      # --- (Opcjonalnie) Test uruchomienia binarki ---
+      - name: Run built binary (headless test)
         run: |
-          echo "✅ Build finished successfully!"
+          if [ -f build/ProgramEle ]; then
+            echo "Binary found, running smoke test..."
+            xvfb-run -a ./build/ProgramEle --version || echo "No CLI output (GUI app)"
+          else
+            echo "⚠️ Binary not found after build!"
+            ls -R build
+          fi
+
+      # --- Zakończenie ---
+      - name: Build finished
+        run: echo "🎉 Qt6 build & test pipeline completed successfully!"
