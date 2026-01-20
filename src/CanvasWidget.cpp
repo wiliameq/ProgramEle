@@ -1741,48 +1741,60 @@ void CanvasWidget::commitTextEdit() {
 
 void CanvasWidget::updateTempBoundingRect() {
     if (!m_hasTempTextItem) return;
-        const double marginX = 8.0;
-        const double marginY = 6.0;
-        const double tailGapPx = 12.0;
-        QSizeF docSize;
+    // Stałe marginesu i odstępu na grot w pikselach
+    const double marginX = 8.0;
+    const double marginY = 6.0;
+    const double tailGapPx = 12.0;
+
+    // Ustal wymiary tekstu: jeśli istnieje QTextEdit, korzystamy z jego dokumentu;
+    // w przeciwnym razie obliczamy wielkość w oparciu o czcionkę m_tempTextItem.
+    QSizeF docSize;
     if (m_textEdit) {
         docSize = m_textEdit->document()->size();
     } else {
-        // Użyj czcionki i treści z m_tempTextItem.  Jeśli tekst jest pusty,
-        // przyjmij pojedynczy znak spacji dla obliczenia rozmiaru.
         QString txt = m_tempTextItem.text;
         if (txt.isEmpty()) txt = QStringLiteral(" ");
         QFont f = m_tempTextItem.font;
         QFontMetrics fm(f);
         docSize = QSizeF(fm.horizontalAdvance(txt), fm.height());
     }
+
+    // Szerokość i wysokość dymka w jednostkach świata (metry) z uwzględnieniem marginesów
     double w_m = 0.0;
     double h_m = 0.0;
     if (m_pixelsPerMeter * m_zoom != 0.0) {
         w_m = (docSize.width() + marginX * 2) / (m_pixelsPerMeter * m_zoom);
         h_m = (docSize.height() + marginY * 2) / (m_pixelsPerMeter * m_zoom);
     }
+
+    // Jeśli dymek był przypięty, nie zmniejszaj jego rozmiaru poniżej poprzedniego
     if (m_isTempBubblePinned && !m_tempTextItem.boundingRect.isNull()) {
         w_m = std::max(w_m, m_tempTextItem.boundingRect.width());
         h_m = std::max(h_m, m_tempTextItem.boundingRect.height());
     }
-    double x_m = m_tempTextItem.boundingRect.left();
-    double y_m = m_tempTextItem.boundingRect.top();
-    if (!m_isTempBubblePinned || m_tempTextItem.boundingRect.isNull()) {
-        double gapWorld = (m_pixelsPerMeter * m_zoom != 0.0)
-            ? tailGapPx / (m_pixelsPerMeter * m_zoom)
-            : 0.0;
-        QRectF rect = bubbleRectForAnchor(m_tempTextItem.pos, QSizeF(w_m, h_m),
-                                          m_tempTextItem.anchor, gapWorld);
-        x_m = rect.left();
-        y_m = rect.top();
+
+    // Odstęp na grot w metrach
+    const double gapWorld = (m_pixelsPerMeter * m_zoom != 0.0)
+        ? tailGapPx / (m_pixelsPerMeter * m_zoom)
+        : 0.0;
+
+    // Wyznacz nową ramkę dymka względem kotwicy za pomocą bubbleRectForAnchor()
+    QRectF newRect = bubbleRectForAnchor(m_tempTextItem.pos,
+                                         QSizeF(w_m, h_m),
+                                         m_tempTextItem.anchor,
+                                         gapWorld);
+
+    // Jeśli dymek jest przypięty, zachowaj co najmniej poprzedni rozmiar
+    if (m_isTempBubblePinned && !m_tempTextItem.boundingRect.isNull()) {
+        newRect.setSize(QSizeF(std::max(w_m, m_tempTextItem.boundingRect.width()),
+                               std::max(h_m, m_tempTextItem.boundingRect.height())));
     }
-    QRectF rect(x_m, y_m, w_m, h_m);
-    m_tempTextItem.boundingRect = rect;
-    if (m_isTempBubblePinned) {
-        double gapWorld = (m_pixelsPerMeter * m_zoom != 0.0)
-            ? tailGapPx / (m_pixelsPerMeter * m_zoom)
-            : 0.0;
+
+    // Zapisz nowy prostokąt jako boundingRect
+    m_tempTextItem.boundingRect = newRect;
+
+    // Kotwica musi zawsze pozostać poza dymkiem, niezależnie od przypięcia
+    if (m_pixelsPerMeter * m_zoom != 0.0) {
         m_tempTextItem.pos = clampAnchorOutsideBubble(m_tempTextItem.boundingRect,
                                                       m_tempTextItem.pos,
                                                       m_tempTextItem.anchor,
