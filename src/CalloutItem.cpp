@@ -17,7 +17,7 @@ constexpr qreal kTailWidth = 20.0;
 }
 
 // ======================================================
-//  Konstruktor — BEZPIECZNY dla środowisk bez sceny
+//  Konstruktor — BEZPIECZNY dla środowisk bez sceny i GUI
 // ======================================================
 CalloutItem::CalloutItem(const QPointF &anchorPos, QGraphicsItem *parent)
     : QGraphicsObject(parent),
@@ -25,19 +25,24 @@ CalloutItem::CalloutItem(const QPointF &anchorPos, QGraphicsItem *parent)
     setFlags(QGraphicsItem::ItemIsMovable | QGraphicsItem::ItemIsSelectable);
     setAcceptHoverEvents(true);
 
-    // Bezpieczna inicjalizacja tekstu — bez natychmiastowego layoutu
+    // Utworzenie tekstu z fallbackiem — bez crasha przy braku X11/fontów
     m_textItem = new QGraphicsTextItem(this);
+
+    // Fallback czcionki — unika QFontDatabase::load w headless CI
+    QFont safeFont("DejaVu Sans");
+    if (safeFont.family().isEmpty())
+        safeFont = QFont(); // Qt fallback
+    m_textItem->setFont(safeFont);
+
+    // Tekst startowy
     m_textItem->setPlainText("Double-click to add a comment...");
     m_textItem->setDefaultTextColor(m_textColor);
-    m_textItem->setFont(m_textFont);
 
-    // Połączenie sygnału: layout tylko, gdy obiekt w scenie
+    // Połączenie sygnału: aktualizacja layoutu tylko, gdy obiekt w scenie
     QObject::connect(m_textItem->document(), &QTextDocument::contentsChanged,
                      this, [this]() {
                          if (scene()) updateTextLayout();
                      });
-
-    // Nie wywołujemy updateTextLayout() tutaj — w testach brak sceny
 }
 
 // ======================================================
@@ -50,6 +55,9 @@ QRectF CalloutItem::boundingRect() const {
 }
 
 void CalloutItem::paint(QPainter *painter, const QStyleOptionGraphicsItem *, QWidget *) {
+    if (!painter)
+        return;
+
     painter->setRenderHint(QPainter::Antialiasing);
     painter->setBrush(m_bubbleFill);
     painter->setPen(QPen(m_bubbleBorder, 2));
@@ -81,11 +89,15 @@ void CalloutItem::paint(QPainter *painter, const QStyleOptionGraphicsItem *, QWi
 }
 
 // ======================================================
-//  Układ tekstu — BEZPIECZNY w środowisku bez sceny
+//  Układ tekstu — bezpieczny dla środowiska offscreen
 // ======================================================
 void CalloutItem::updateTextLayout() {
-    if (!m_textItem) return;
-    if (!scene()) return; // Zapobiega crashowi bez kontekstu graficznego
+    if (!m_textItem)
+        return;
+    if (!scene())
+        return;
+    if (m_textItem->document()->isEmpty())
+        return;
 
     prepareGeometryChange();
     m_rect = m_rect.normalized();
