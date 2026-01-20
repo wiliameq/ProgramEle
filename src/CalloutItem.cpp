@@ -1,5 +1,7 @@
 #include "CalloutItem.h"
 #include <QGraphicsSceneMouseEvent>
+#include <QGraphicsSceneHoverEvent>
+#include <QCursor>
 #include <QPainter>
 #include <QTextDocument>
 #include <QLineF>
@@ -7,6 +9,9 @@
 namespace {
 constexpr qreal kCornerRadius = 6.0;
 constexpr qreal kPadding = 10.0;
+constexpr qreal kHandleSize = 10.0;
+constexpr qreal kMinWidth = 80.0;
+constexpr qreal kMinHeight = 50.0;
 constexpr qreal kTailWidth = 20.0;
 constexpr qreal kTailLength = 30.0;
 }
@@ -28,7 +33,7 @@ CalloutItem::CalloutItem(const QPointF &anchorPos, QGraphicsItem *parent)
 QRectF CalloutItem::boundingRect() const {
     QPointF anchorItemPos = mapFromScene(m_anchorScenePos);
     QRectF rect = m_rect.united(QRectF(anchorItemPos, QSizeF(1, 1)).normalized());
-    return rect.adjusted(-5, -5, 5, 5);
+    return rect.adjusted(-kHandleSize, -kHandleSize, kHandleSize, kHandleSize);
 }
 
 void CalloutItem::paint(QPainter *painter, const QStyleOptionGraphicsItem *, QWidget *) {
@@ -40,7 +45,7 @@ void CalloutItem::paint(QPainter *painter, const QStyleOptionGraphicsItem *, QWi
     path.addRoundedRect(m_rect, kCornerRadius, kCornerRadius);
 
     QPointF anchorItemPos = mapFromScene(m_anchorScenePos);
-    QPointF edgePoint = findNearestEdgePoint(anchorItemPos);
+    QPointF edgePoint = calculateEdgeIntersection(anchorItemPos);
 
     QLineF tailLine(edgePoint, anchorItemPos);
     tailLine.setLength(kTailLength);
@@ -57,23 +62,104 @@ void CalloutItem::paint(QPainter *painter, const QStyleOptionGraphicsItem *, QWi
     path.addPolygon(tail);
 
     painter->drawPath(path);
+
+    painter->setBrush(Qt::white);
+    painter->setPen(Qt::black);
+    for (const auto &handle : m_handles) {
+        painter->drawEllipse(handle);
+    }
 }
 
 void CalloutItem::updateTextLayout() {
     prepareGeometryChange();
+    m_rect = m_rect.normalized();
+
+    if (m_rect.width() < kMinWidth) m_rect.setWidth(kMinWidth);
+    if (m_rect.height() < kMinHeight) m_rect.setHeight(kMinHeight);
+
+    qreal textWidth = qMax<qreal>(10.0, m_rect.width() - 2 * kPadding);
+    m_textItem->setTextWidth(textWidth);
     QSizeF textSize = m_textItem->document()->size();
-    m_rect = QRectF(0, 0, textSize.width() + 2 * kPadding, textSize.height() + 2 * kPadding);
-    m_textItem->setPos(kPadding, kPadding);
+    qreal requiredHeight = textSize.height() + 2 * kPadding;
+    if (m_rect.height() < requiredHeight) {
+        m_rect.setHeight(requiredHeight);
+    }
+    m_textItem->setPos(m_rect.left() + kPadding, m_rect.top() + kPadding);
+    updateHandles();
     update();
 }
 
-QPointF CalloutItem::findNearestEdgePoint(const QPointF &anchorItemPos) const {
-    QPointF p = m_rect.center();
-    if (anchorItemPos.x() < m_rect.left()) p.setX(m_rect.left());
-    if (anchorItemPos.x() > m_rect.right()) p.setX(m_rect.right());
-    if (anchorItemPos.y() < m_rect.top()) p.setY(m_rect.top());
-    if (anchorItemPos.y() > m_rect.bottom()) p.setY(m_rect.bottom());
-    return p;
+void CalloutItem::updateHandles() {
+    m_handles = {
+        handleRect(Handle::TopLeft),
+        handleRect(Handle::TopRight),
+        handleRect(Handle::BottomLeft),
+        handleRect(Handle::BottomRight),
+        handleRect(Handle::Anchor)
+    };
+}
+
+QRectF CalloutItem::handleRect(Handle h) const {
+    QPointF center;
+    switch (h) {
+        case Handle::TopLeft:
+            center = m_rect.topLeft();
+            break;
+        case Handle::TopRight:
+            center = m_rect.topRight();
+            break;
+        case Handle::BottomLeft:
+            center = m_rect.bottomLeft();
+            break;
+        case Handle::BottomRight:
+            center = m_rect.bottomRight();
+            break;
+        case Handle::Anchor:
+            center = mapFromScene(m_anchorScenePos);
+            break;
+        default:
+            return QRectF();
+    }
+    return QRectF(center.x() - kHandleSize / 2, center.y() - kHandleSize / 2, kHandleSize, kHandleSize);
+}
+
+CalloutItem::Handle CalloutItem::handleAt(const QPointF &pos) const {
+    const std::array<Handle, 5> order = {
+        Handle::TopLeft,
+        Handle::TopRight,
+        Handle::BottomLeft,
+        Handle::BottomRight,
+        Handle::Anchor
+    };
+    for (size_t i = 0; i < m_handles.size(); ++i) {
+        if (m_handles[i].contains(pos)) {
+            return order[i];
+        }
+    }
+    return Handle::None;
+}
+
+QPointF CalloutItem::calculateEdgeIntersection(const QPointF &anchorItemPos) const {
+    QPointF center = m_rect.center();
+    QLineF ray(center, anchorItemPos);
+    if (ray.length() < 0.001) {
+        return center;
+    }
+    ray.setLength(ray.length() + qMax(m_rect.width(), m_rect.height()) * 2.0);
+    QPointF intersect;
+    const QLineF sides[4] = {
+        QLineF(m_rect.topLeft(), m_rect.topRight()),
+        QLineF(m_rect.topRight(), m_rect.bottomRight()),
+        QLineF(m_rect.bottomRight(), m_rect.bottomLeft()),
+        QLineF(m_rect.bottomLeft(), m_rect.topLeft())
+    };
+    for (const auto &side : sides) {
+        QPointF point;
+        if (ray.intersects(side, &point) == QLineF::BoundedIntersection) {
+            intersect = point;
+        }
+    }
+    return intersect.isNull() ? center : intersect;
 }
 
 void CalloutItem::setTextColor(const QColor &color) {
@@ -100,6 +186,7 @@ void CalloutItem::setFont(const QFont &font) {
 
 void CalloutItem::setAnchorPos(const QPointF &scenePos) {
     m_anchorScenePos = scenePos;
+    updateHandles();
     update();
 }
 
@@ -126,11 +213,66 @@ void CalloutItem::mouseDoubleClickEvent(QGraphicsSceneMouseEvent *event) {
     else finishEditing();
 }
 
+void CalloutItem::mousePressEvent(QGraphicsSceneMouseEvent *event) {
+    m_activeHandle = handleAt(event->pos());
+    if (m_activeHandle != Handle::None) {
+        event->accept();
+        return;
+    }
+    QGraphicsItem::mousePressEvent(event);
+}
+
 void CalloutItem::mouseMoveEvent(QGraphicsSceneMouseEvent *event) {
-    QGraphicsItem::mouseMoveEvent(event);
+    if (m_activeHandle == Handle::None) {
+        QGraphicsItem::mouseMoveEvent(event);
+        return;
+    }
+
+    QPointF delta = event->pos() - event->lastPos();
+    switch (m_activeHandle) {
+        case Handle::TopLeft:
+            m_rect.setTopLeft(m_rect.topLeft() + delta);
+            break;
+        case Handle::TopRight:
+            m_rect.setTopRight(m_rect.topRight() + delta);
+            break;
+        case Handle::BottomLeft:
+            m_rect.setBottomLeft(m_rect.bottomLeft() + delta);
+            break;
+        case Handle::BottomRight:
+            m_rect.setBottomRight(m_rect.bottomRight() + delta);
+            break;
+        case Handle::Anchor:
+            m_anchorScenePos = mapToScene(event->pos());
+            break;
+        default:
+            break;
+    }
+    updateTextLayout();
 }
 
 void CalloutItem::mouseReleaseEvent(QGraphicsSceneMouseEvent *event) {
+    m_activeHandle = Handle::None;
     QGraphicsItem::mouseReleaseEvent(event);
-    updateTextLayout();
+}
+
+void CalloutItem::hoverMoveEvent(QGraphicsSceneHoverEvent *event) {
+    Handle h = handleAt(event->pos());
+    switch (h) {
+        case Handle::TopLeft:
+        case Handle::BottomRight:
+            setCursor(QCursor(Qt::SizeFDiagCursor));
+            break;
+        case Handle::TopRight:
+        case Handle::BottomLeft:
+            setCursor(QCursor(Qt::SizeBDiagCursor));
+            break;
+        case Handle::Anchor:
+            setCursor(QCursor(Qt::CrossCursor));
+            break;
+        default:
+            unsetCursor();
+            break;
+    }
+    QGraphicsItem::hoverMoveEvent(event);
 }
