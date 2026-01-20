@@ -1,0 +1,5 @@
+C:/PROGRAM1/poprawki/program 1/src/CMakeFiles/ElecCad2D.dir
+C:/PROGRAM1/poprawki/program 1/src/CMakeFiles/edit_cache.dir
+C:/PROGRAM1/poprawki/program 1/src/CMakeFiles/rebuild_cache.dir
+C:/PROGRAM1/poprawki/program 1/src/CMakeFiles/ElecCad2D_autogen_timestamp_deps.dir
+C:/PROGRAM1/poprawki/program 1/src/CMakeFiles/ElecCad2D_autogen.dir

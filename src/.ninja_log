@@ -1,0 +1,27 @@
+# ninja log v6
+40	772	7863104977170195	ElecCad2D_autogen/timestamp	bc379743fc47d3a1
+40	772	7863104977170195	ElecCad2D_autogen/mocs_compilation.cpp	bc379743fc47d3a1
+40	772	7863104977170195	C:/PROGRAM1/poprawki/program 1/src/ElecCad2D_autogen/timestamp	bc379743fc47d3a1
+40	772	7863104977170195	C:/PROGRAM1/poprawki/program 1/src/ElecCad2D_autogen/mocs_compilation.cpp	bc379743fc47d3a1
+787	3902	7863104978122880	CMakeFiles/ElecCad2D.dir/main.cpp.obj	db8b56e1c1e9c300
+826	3930	7863104978515674	CMakeFiles/ElecCad2D.dir/ToolSettingsWidget.cpp.obj	b374aa0fdaa07cce
+833	4097	7863104978576405	CMakeFiles/ElecCad2D.dir/FavoritesDockWidget.cpp.obj	90d24b5e41bf5dac
+819	4473	7863104978449545	CMakeFiles/ElecCad2D.dir/ProjectNavigatorWidget.cpp.obj	6e4f8d27f9305d22
+781	4512	7863104978056926	CMakeFiles/ElecCad2D.dir/ElecCad2D_autogen/mocs_compilation.cpp.obj	9a489d54d230c357
+813	4561	7863104978378936	CMakeFiles/ElecCad2D.dir/ToolsDockWidget.cpp.obj	34bd48f4ff383d4b
+799	5414	7863104978242658	CMakeFiles/ElecCad2D.dir/CanvasWidget.cpp.obj	f2d005e34f041b8a
+806	5902	7863104978307309	CMakeFiles/ElecCad2D.dir/Dialogs.cpp.obj	4d4eefcb20437e13
+41	78	7901938168728597	CMakeFiles/clean.additional	baedbe210acaa455
+78	110	7901938169097312	clean	423d399e6810f01
+74	843	7901938177913666	ElecCad2D_autogen/timestamp	bc379743fc47d3a1
+74	843	7901938177913666	ElecCad2D_autogen/mocs_compilation.cpp	bc379743fc47d3a1
+74	843	7901938177913666	C:/PROGRAM1/poprawki/program 1/src/ElecCad2D_autogen/timestamp	bc379743fc47d3a1
+74	843	7901938177913666	C:/PROGRAM1/poprawki/program 1/src/ElecCad2D_autogen/mocs_compilation.cpp	bc379743fc47d3a1
+852	4238	7901938178794528	CMakeFiles/ElecCad2D.dir/main.cpp.obj	db8b56e1c1e9c300
+893	4253	7901938179207241	CMakeFiles/ElecCad2D.dir/ToolSettingsWidget.cpp.obj	b374aa0fdaa07cce
+900	4539	7901938179282412	CMakeFiles/ElecCad2D.dir/FavoritesDockWidget.cpp.obj	90d24b5e41bf5dac
+885	4873	7901938179133341	CMakeFiles/ElecCad2D.dir/ProjectNavigatorWidget.cpp.obj	6e4f8d27f9305d22
+878	4896	7901938179061013	CMakeFiles/ElecCad2D.dir/ToolsDockWidget.cpp.obj	34bd48f4ff383d4b
+846	4989	7901938178733363	CMakeFiles/ElecCad2D.dir/ElecCad2D_autogen/mocs_compilation.cpp.obj	9a489d54d230c357
+864	5737	7901938178915798	CMakeFiles/ElecCad2D.dir/CanvasWidget.cpp.obj	f2d005e34f041b8a
+870	6297	7901938178981047	CMakeFiles/ElecCad2D.dir/Dialogs.cpp.obj	4d4eefcb20437e13
