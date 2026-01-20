@@ -1,4 +1,4 @@
-name: 🧱 Build and Test ProgramEle (Qt 6 - Stable)
+name: 🧱 Build and Test ProgramEle (Qt 6 - Offscreen Safe)
 
 on:
   push:
@@ -30,7 +30,7 @@ jobs:
             cmake ninja-build g++
           echo "✅ Qt6 and build tools installed successfully."
 
-      # --- 3️⃣ Diagnostyka Qt6 (pokaże gdzie CMake widzi pliki Qt) ---
+      # --- 3️⃣ Diagnostyka Qt6 (sprawdzenie dostępności) ---
       - name: Verify Qt installation
         run: |
           echo "🧩 Checking Qt6 installation paths..."
@@ -53,7 +53,7 @@ jobs:
           cmake --build build --parallel || { echo "❌ Build failed"; exit 1; }
           echo "✅ ProgramEle built successfully."
 
-      # --- 6️⃣ Sprawdzenie czy główny plik binarny istnieje ---
+      # --- 6️⃣ Sprawdzenie binarki głównej ---
       - name: Check main binary
         run: |
           if [ -f build/ProgramEle ]; then
@@ -63,21 +63,25 @@ jobs:
             ls -R build || true
           fi
 
-      # --- 7️⃣ Test podstawowy (uruchomienie bez GUI) ---
+      # --- 7️⃣ Test podstawowy (główna aplikacja w trybie headless) ---
       - name: Run main binary (headless test)
+        env:
+          QT_QPA_PLATFORM: offscreen
         run: |
           if [ -f build/ProgramEle ]; then
             echo "🚀 Running headless smoke test..."
-            xvfb-run -a ./build/ProgramEle --version || echo "ℹ️ GUI app cannot show window (expected)."
+            xvfb-run -a ./build/ProgramEle --version || echo "ℹ️ GUI app cannot display output (expected)."
           else
             echo "⚠️ ProgramEle binary missing, skipping GUI run."
           fi
 
-      # --- 8️⃣ Test headless (dla CODEX) ---
-      - name: Run Codex headless logic test
+      # --- 8️⃣ Test headless logic (dla CODEX, bez GUI) ---
+      - name: Run Codex headless logic test (offscreen)
+        env:
+          QT_QPA_PLATFORM: offscreen
         run: |
           if [ -f build/TestProgramEle ]; then
-            echo "🧪 Running Codex headless logic test..."
+            echo "🧪 Running Codex headless logic test (offscreen)..."
             ./build/TestProgramEle || { echo '❌ TestProgramEle failed'; exit 1; }
             echo "✅ Headless logic test finished successfully."
           else
