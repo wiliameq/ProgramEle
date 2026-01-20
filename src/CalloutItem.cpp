@@ -5,6 +5,7 @@
 #include <QPainter>
 #include <QTextDocument>
 #include <QLineF>
+#include <limits>
 
 namespace {
 constexpr qreal kCornerRadius = 6.0;
@@ -13,7 +14,6 @@ constexpr qreal kHandleSize = 10.0;
 constexpr qreal kMinWidth = 80.0;
 constexpr qreal kMinHeight = 50.0;
 constexpr qreal kTailWidth = 20.0;
-constexpr qreal kTailLength = 30.0;
 }
 
 CalloutItem::CalloutItem(const QPointF &anchorPos, QGraphicsItem *parent)
@@ -27,6 +27,7 @@ CalloutItem::CalloutItem(const QPointF &anchorPos, QGraphicsItem *parent)
     m_textItem->setDefaultTextColor(m_textColor);
     m_textItem->setFont(m_textFont);
     m_textItem->setTextWidth(200);
+    connect(m_textItem->document(), &QTextDocument::contentsChanged, this, &CalloutItem::updateTextLayout);
     updateTextLayout();
 }
 
@@ -47,9 +48,7 @@ void CalloutItem::paint(QPainter *painter, const QStyleOptionGraphicsItem *, QWi
     QPointF anchorItemPos = mapFromScene(m_anchorScenePos);
     QPointF edgePoint = calculateEdgeIntersection(anchorItemPos);
 
-    QLineF tailLine(edgePoint, anchorItemPos);
-    tailLine.setLength(kTailLength);
-    QPointF tip = tailLine.p2();
+    QPointF tip = anchorItemPos;
 
     QLineF base(edgePoint, tip);
     QLineF perp = base.normalVector();
@@ -73,9 +72,12 @@ void CalloutItem::paint(QPainter *painter, const QStyleOptionGraphicsItem *, QWi
 void CalloutItem::updateTextLayout() {
     prepareGeometryChange();
     m_rect = m_rect.normalized();
-
-    if (m_rect.width() < kMinWidth) m_rect.setWidth(kMinWidth);
-    if (m_rect.height() < kMinHeight) m_rect.setHeight(kMinHeight);
+    if (m_rect.width() < kMinWidth) {
+        m_rect.setWidth(kMinWidth);
+    }
+    if (m_rect.height() < kMinHeight) {
+        m_rect.setHeight(kMinHeight);
+    }
 
     qreal textWidth = qMax<qreal>(10.0, m_rect.width() - 2 * kPadding);
     m_textItem->setTextWidth(textWidth);
@@ -87,6 +89,60 @@ void CalloutItem::updateTextLayout() {
     m_textItem->setPos(m_rect.left() + kPadding, m_rect.top() + kPadding);
     updateHandles();
     update();
+}
+
+void CalloutItem::applyHandleDrag(const QPointF &delta) {
+    switch (m_activeHandle) {
+        case Handle::TopLeft:
+            m_rect.setTopLeft(m_rect.topLeft() + delta);
+            break;
+        case Handle::TopRight:
+            m_rect.setTopRight(m_rect.topRight() + delta);
+            break;
+        case Handle::BottomLeft:
+            m_rect.setBottomLeft(m_rect.bottomLeft() + delta);
+            break;
+        case Handle::BottomRight:
+            m_rect.setBottomRight(m_rect.bottomRight() + delta);
+            break;
+        default:
+            break;
+    }
+    enforceMinimumSize(m_activeHandle);
+}
+
+void CalloutItem::enforceMinimumSize(Handle handle) {
+    if (m_rect.width() < kMinWidth) {
+        switch (handle) {
+            case Handle::TopLeft:
+            case Handle::BottomLeft:
+                m_rect.setLeft(m_rect.right() - kMinWidth);
+                break;
+            case Handle::TopRight:
+            case Handle::BottomRight:
+                m_rect.setRight(m_rect.left() + kMinWidth);
+                break;
+            default:
+                m_rect.setWidth(kMinWidth);
+                break;
+        }
+    }
+    if (m_rect.height() < kMinHeight) {
+        switch (handle) {
+            case Handle::TopLeft:
+            case Handle::TopRight:
+                m_rect.setTop(m_rect.bottom() - kMinHeight);
+                break;
+            case Handle::BottomLeft:
+            case Handle::BottomRight:
+                m_rect.setBottom(m_rect.top() + kMinHeight);
+                break;
+            default:
+                m_rect.setHeight(kMinHeight);
+                break;
+        }
+    }
+    m_rect = m_rect.normalized();
 }
 
 void CalloutItem::updateHandles() {
@@ -141,12 +197,16 @@ CalloutItem::Handle CalloutItem::handleAt(const QPointF &pos) const {
 
 QPointF CalloutItem::calculateEdgeIntersection(const QPointF &anchorItemPos) const {
     QPointF center = m_rect.center();
-    QLineF ray(center, anchorItemPos);
-    if (ray.length() < 0.001) {
-        return center;
+    QPointF direction = anchorItemPos - center;
+    if (m_rect.contains(anchorItemPos)) {
+        direction = QPointF(0.0, 1.0);
+    } else if (qAbs(direction.x()) < 0.001 && qAbs(direction.y()) < 0.001) {
+        direction = QPointF(0.0, 1.0);
     }
-    ray.setLength(ray.length() + qMax(m_rect.width(), m_rect.height()) * 2.0);
+    QLineF ray(center, center + direction);
+    ray.setLength(qMax(m_rect.width(), m_rect.height()) * 2.0);
     QPointF intersect;
+    qreal closestDistance = std::numeric_limits<qreal>::max();
     const QLineF sides[4] = {
         QLineF(m_rect.topLeft(), m_rect.topRight()),
         QLineF(m_rect.topRight(), m_rect.bottomRight()),
@@ -156,7 +216,11 @@ QPointF CalloutItem::calculateEdgeIntersection(const QPointF &anchorItemPos) con
     for (const auto &side : sides) {
         QPointF point;
         if (ray.intersects(side, &point) == QLineF::BoundedIntersection) {
-            intersect = point;
+            qreal distance = QLineF(center, point).length();
+            if (distance < closestDistance) {
+                closestDistance = distance;
+                intersect = point;
+            }
         }
     }
     return intersect.isNull() ? center : intersect;
@@ -185,6 +249,7 @@ void CalloutItem::setFont(const QFont &font) {
 }
 
 void CalloutItem::setAnchorPos(const QPointF &scenePos) {
+    prepareGeometryChange();
     m_anchorScenePos = scenePos;
     updateHandles();
     update();
@@ -228,26 +293,16 @@ void CalloutItem::mouseMoveEvent(QGraphicsSceneMouseEvent *event) {
         return;
     }
 
-    QPointF delta = event->pos() - event->lastPos();
-    switch (m_activeHandle) {
-        case Handle::TopLeft:
-            m_rect.setTopLeft(m_rect.topLeft() + delta);
-            break;
-        case Handle::TopRight:
-            m_rect.setTopRight(m_rect.topRight() + delta);
-            break;
-        case Handle::BottomLeft:
-            m_rect.setBottomLeft(m_rect.bottomLeft() + delta);
-            break;
-        case Handle::BottomRight:
-            m_rect.setBottomRight(m_rect.bottomRight() + delta);
-            break;
-        case Handle::Anchor:
-            m_anchorScenePos = mapToScene(event->pos());
-            break;
-        default:
-            break;
+    if (m_activeHandle == Handle::Anchor) {
+        prepareGeometryChange();
+        m_anchorScenePos = mapToScene(event->pos());
+        updateHandles();
+        update();
+        return;
     }
+
+    QPointF delta = event->pos() - event->lastPos();
+    applyHandleDrag(delta);
     updateTextLayout();
 }
 
