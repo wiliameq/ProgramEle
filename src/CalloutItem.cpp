@@ -42,12 +42,15 @@ void CalloutItem::paint(QPainter *painter, const QStyleOptionGraphicsItem *, QWi
     QPointF anchorItemPos = mapFromScene(m_anchorScenePos);
     QPointF edgePoint = findNearestEdgePoint(anchorItemPos);
 
-    QLineF line(edgePoint, anchorItemPos);
-    line.setLength(kTailLength);
-    QPointF tip = line.p2();
+    QLineF tailLine(edgePoint, anchorItemPos);
+    tailLine.setLength(kTailLength);
+    QPointF tip = tailLine.p2();
 
-    QPointF left = edgePoint + QPointF(-kTailWidth / 2, 0);
-    QPointF right = edgePoint + QPointF(kTailWidth / 2, 0);
+    QLineF base(edgePoint, tip);
+    QLineF perp = base.normalVector();
+    perp.setLength(kTailWidth / 2);
+    QPointF left = edgePoint + (perp.p2() - perp.p1());
+    QPointF right = edgePoint - (perp.p2() - perp.p1());
 
     QPolygonF tail;
     tail << left << tip << right;
@@ -58,9 +61,10 @@ void CalloutItem::paint(QPainter *painter, const QStyleOptionGraphicsItem *, QWi
 
 void CalloutItem::updateTextLayout() {
     prepareGeometryChange();
-    QSizeF docSize = m_textItem->document()->size();
-    m_rect = QRectF(0, 0, docSize.width() + 2 * kPadding, docSize.height() + 2 * kPadding);
+    QSizeF textSize = m_textItem->document()->size();
+    m_rect = QRectF(0, 0, textSize.width() + 2 * kPadding, textSize.height() + 2 * kPadding);
     m_textItem->setPos(kPadding, kPadding);
+    update();
 }
 
 QPointF CalloutItem::findNearestEdgePoint(const QPointF &anchorItemPos) const {
