@@ -192,38 +192,30 @@ void CanvasWidget::insertPendingText(const QString& text) {
     if (!m_hasTextInsertPos) return;
     QString trimmed = text.trimmed();
     if (trimmed.isEmpty()) return;
-    // Oblicz boundingRect w jednostkach świata oraz ustaw kierunek strzałki
-    QFont f = m_insertTextFont;
-    QFontMetrics fm(f);
-    int textW = fm.horizontalAdvance(trimmed);
-    int textH = fm.height();
-    double w_m = textW / (m_pixelsPerMeter * m_zoom);
-    double h_m = textH / (m_pixelsPerMeter * m_zoom);
-    // Określ domyślny kierunek dla nowych tekstów
-    CalloutAnchor anchor = m_insertTextAnchor;
-    // Oblicz górny lewy róg prostokąta w świecie w zależności od kierunku
-    double x_m, y_m;
-    switch (anchor) {
-    case CalloutAnchor::Bottom:
-        x_m = m_textInsertPos.x() - w_m / 2.0;
-        y_m = m_textInsertPos.y() - h_m;
-        break;
-    case CalloutAnchor::Top:
-        x_m = m_textInsertPos.x() - w_m / 2.0;
-        y_m = m_textInsertPos.y();
-        break;
-    case CalloutAnchor::Left:
-        x_m = m_textInsertPos.x();
-        y_m = m_textInsertPos.y() - h_m / 2.0;
-        break;
-    case CalloutAnchor::Right:
-        x_m = m_textInsertPos.x() - w_m;
-        y_m = m_textInsertPos.y() - h_m / 2.0;
-        break;
-    }
-    QRectF worldRect(x_m, y_m, w_m, h_m);
+    // Wyznacz wymiary ramki dymka z marginesami i odstępem na grot.
+    QFontMetricsF metrics(m_insertTextFont);
+    qreal textW = metrics.horizontalAdvance(trimmed);
+    qreal textH = metrics.height();
+    // marginesy wokół tekstu (piksele)
+    constexpr qreal marginX = 8.0;
+    constexpr qreal marginY = 6.0;
+    // odstęp na grot – minimalna odległość między ramką a punktem kotwiczenia (piksele)
+    constexpr qreal tailGap = 12.0;
+    // oblicz szerokość i wysokość dymka w pikselach
+    qreal bubbleW = textW + 2 * marginX;
+    qreal bubbleH = textH + 2 * marginY;
+    // zamień na jednostki świata
+    qreal pixelsPerMeter = m_pixelsPerMeter * m_zoom;
+    qreal bubbleWWorld = bubbleW / pixelsPerMeter;
+    qreal bubbleHWorld = bubbleH / pixelsPerMeter;
+    qreal gapWorld = tailGap / pixelsPerMeter;
+    // Określ orientację grotu w zależności od położenia (domyślnie w dół).
+    CalloutAnchor anchor = CalloutAnchor::Bottom;
+    QRectF worldRect = bubbleRectForAnchor(m_textInsertPos, QSizeF(bubbleWWorld, bubbleHWorld),
+                                           anchor, gapWorld);
+    QPointF anchorPos = clampAnchorOutsideBubble(worldRect, m_textInsertPos, anchor, gapWorld);
     TextItem item;
-    item.pos = m_textInsertPos;
+    item.pos = anchorPos;
     item.text = trimmed;
     item.color = m_insertTextColor;
     item.font = m_insertTextFont;
