@@ -192,38 +192,23 @@ void CanvasWidget::insertPendingText(const QString& text) {
     if (!m_hasTextInsertPos) return;
     QString trimmed = text.trimmed();
     if (trimmed.isEmpty()) return;
-    // Oblicz boundingRect w jednostkach świata oraz ustaw kierunek strzałki
-    QFont f = m_insertTextFont;
-    QFontMetrics fm(f);
-    int textW = fm.horizontalAdvance(trimmed);
-    int textH = fm.height();
-    double w_m = textW / (m_pixelsPerMeter * m_zoom);
-    double h_m = textH / (m_pixelsPerMeter * m_zoom);
-    // Określ domyślny kierunek dla nowych tekstów
-    CalloutAnchor anchor = m_insertTextAnchor;
-    // Oblicz górny lewy róg prostokąta w świecie w zależności od kierunku
-    double x_m, y_m;
-    switch (anchor) {
-    case CalloutAnchor::Bottom:
-        x_m = m_textInsertPos.x() - w_m / 2.0;
-        y_m = m_textInsertPos.y() - h_m;
-        break;
-    case CalloutAnchor::Top:
-        x_m = m_textInsertPos.x() - w_m / 2.0;
-        y_m = m_textInsertPos.y();
-        break;
-    case CalloutAnchor::Left:
-        x_m = m_textInsertPos.x();
-        y_m = m_textInsertPos.y() - h_m / 2.0;
-        break;
-    case CalloutAnchor::Right:
-        x_m = m_textInsertPos.x() - w_m;
-        y_m = m_textInsertPos.y() - h_m / 2.0;
-        break;
-    }
-    QRectF worldRect(x_m, y_m, w_m, h_m);
+    // Oblicz prostokąt dymka z marginesami i odstępem na grot, korzystając z
+    // bubbleRectForAnchor() i clampAnchorOutsideBubble(), aby grot nie trafiał do środka dymka.
+    QFontMetricsF metrics(m_insertTextFont);
+    qreal textW = metrics.horizontalAdvance(trimmed);
+    qreal textH = metrics.height();
+    constexpr qreal marginX = 8.0;
+    constexpr qreal marginY = 6.0;
+    constexpr qreal tailGapPx = 12.0;
+    qreal pixelsPerMeter = m_pixelsPerMeter * m_zoom;
+    qreal bubbleWWorld = (textW + 2 * marginX) / pixelsPerMeter;
+    qreal bubbleHWorld = (textH + 2 * marginY) / pixelsPerMeter;
+    qreal gapWorld = tailGapPx / pixelsPerMeter;
+    CalloutAnchor anchor = CalloutAnchor::Bottom;
+    QRectF worldRect = bubbleRectForAnchor(m_textInsertPos, QSizeF(bubbleWWorld, bubbleHWorld), anchor, gapWorld);
+    QPointF anchorPos = clampAnchorOutsideBubble(worldRect, m_textInsertPos, anchor, gapWorld);
     TextItem item;
-    item.pos = m_textInsertPos;
+    item.pos = anchorPos;
     item.text = trimmed;
     item.color = m_insertTextColor;
     item.font = m_insertTextFont;
@@ -1770,32 +1755,25 @@ void CanvasWidget::updateTempBoundingRect() {
         w_m = (docSize.width() + marginX * 2) / (m_pixelsPerMeter * m_zoom);
         h_m = (docSize.height() + marginY * 2) / (m_pixelsPerMeter * m_zoom);
     }
+    // Dla nowego dymka albo po zmianie anchor/tekst, oblicz boundingRect względem
+    // punktu kotwicy, korzystając z marginesów i bubbleRectForAnchor().
+    const double gapWorld = (m_pixelsPerMeter * m_zoom != 0.0)
+        ? tailGapPx / (m_pixelsPerMeter * m_zoom)
+        : 0.0;
+    QRectF newRect = bubbleRectForAnchor(m_tempTextItem.pos, QSizeF(w_m, h_m),
+                                         m_tempTextItem.anchor, gapWorld);
+    // Jeśli dymek był przypięty (przeciągnięty), zachowaj jego rozmiar, ale pilnuj, by grot
+    // pozostał na zewnątrz przy użyciu clampAnchorOutsideBubble().
     if (m_isTempBubblePinned && !m_tempTextItem.boundingRect.isNull()) {
-        w_m = std::max(w_m, m_tempTextItem.boundingRect.width());
-        h_m = std::max(h_m, m_tempTextItem.boundingRect.height());
+        newRect.setSize(QSizeF(std::max(w_m, m_tempTextItem.boundingRect.width()),
+                               std::max(h_m, m_tempTextItem.boundingRect.height())));
     }
-    double x_m = m_tempTextItem.boundingRect.left();
-    double y_m = m_tempTextItem.boundingRect.top();
-    if (!m_isTempBubblePinned || m_tempTextItem.boundingRect.isNull()) {
-        double gapWorld = (m_pixelsPerMeter * m_zoom != 0.0)
-            ? tailGapPx / (m_pixelsPerMeter * m_zoom)
-            : 0.0;
-        QRectF rect = bubbleRectForAnchor(m_tempTextItem.pos, QSizeF(w_m, h_m),
-                                          m_tempTextItem.anchor, gapWorld);
-        x_m = rect.left();
-        y_m = rect.top();
-    }
-    QRectF rect(x_m, y_m, w_m, h_m);
-    m_tempTextItem.boundingRect = rect;
-    if (m_isTempBubblePinned) {
-        double gapWorld = (m_pixelsPerMeter * m_zoom != 0.0)
-            ? tailGapPx / (m_pixelsPerMeter * m_zoom)
-            : 0.0;
-        m_tempTextItem.pos = clampAnchorOutsideBubble(m_tempTextItem.boundingRect,
-                                                      m_tempTextItem.pos,
-                                                      m_tempTextItem.anchor,
-                                                      gapWorld);
-    }
+    m_tempTextItem.boundingRect = newRect;
+    // Aktualizuj pozycję kotwicy, aby nie znalazła się wewnątrz dymka.
+    m_tempTextItem.pos = clampAnchorOutsideBubble(m_tempTextItem.boundingRect,
+                                                  m_tempTextItem.pos,
+                                                  m_tempTextItem.anchor,
+                                                  gapWorld);
 }
 
 void CanvasWidget::repositionTempTextEdit() {
