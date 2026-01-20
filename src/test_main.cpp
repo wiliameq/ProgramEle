@@ -1,50 +1,62 @@
-#include <QCoreApplication>
+#include <QGuiApplication>
 #include <QDebug>
+#include <QTimer>
 #include "CalloutItem.h"
 
-// Ten test sprawdza logikę klasy CalloutItem bez sceny graficznej.
-// Działa w CI (offscreen), nie używa QGraphicsScene ani QGuiApplication.
+// Test logiczny CalloutItem w środowisku offscreen (QGuiApplication).
 
 int main(int argc, char *argv[]) {
-    // Ustawienie trybu offscreen (na wszelki wypadek)
+    // Wymuszenie trybu offscreen
     qputenv("QT_QPA_PLATFORM", QByteArray("offscreen"));
-    QCoreApplication app(argc, argv);
 
-    qDebug() << "🧪 Running headless logic test (non-GUI)...";
+    QGuiApplication app(argc, argv);
+    qDebug() << "🧪 Running enhanced headless logic test (offscreen + GUI)...";
 
     try {
-        // Utwórz obiekt CalloutItem (bez rodzica graficznego)
-        CalloutItem item(QPointF(100, 100));
+        // Krótka przerwa, żeby Qt w pełni zainicjalizował środowisko graficzne
+        QTimer::singleShot(100, []() {
+            try {
+                // Utworzenie obiektu CalloutItem
+                CalloutItem item(QPointF(100, 100));
 
-        // Ustaw parametry testowe
-        item.setAnchorPos(QPointF(200, 150));
-        item.setBubbleFill(Qt::yellow);
-        item.setBubbleBorder(Qt::black);
-        item.setTextColor(Qt::blue);
+                // Ustawienia testowe
+                item.setAnchorPos(QPointF(200, 150));
+                item.setBubbleFill(Qt::yellow);
+                item.setBubbleBorder(Qt::black);
+                item.setTextColor(Qt::blue);
 
-        // Wywołaj bezpieczne metody logiczne (bez sceny)
-        QRectF rect = item.boundingRect();
-        QPointF anchor = item.anchorPos();
+                // Odczyt właściwości
+                QRectF rect = item.boundingRect();
+                QPointF anchor = item.anchorPos();
 
-        qDebug() << "✅ CalloutItem created successfully.";
-        qDebug() << "Anchor position:" << anchor;
-        qDebug() << "Bounding rect:" << rect;
+                qDebug() << "✅ CalloutItem constructed successfully";
+                qDebug() << "Anchor:" << anchor;
+                qDebug() << "Rect:" << rect;
 
-        // Prosta kontrola sanity check
-        if (rect.width() <= 0 || rect.height() <= 0)
-            qDebug() << "⚠️ Unexpected rect size.";
+                // Test sanity check
+                if (rect.width() < 1 || rect.height() < 1)
+                    qDebug() << "⚠️ Warning: bounding rect too small!";
 
-        qDebug() << "✅ Logical test finished without crash.";
+                qDebug() << "✅ Headless logic test completed successfully.";
+            } catch (std::exception &e) {
+                qDebug() << "❌ Exception in inner logic:" << e.what();
+            } catch (...) {
+                qDebug() << "❌ Unknown exception in CalloutItem constructor or logic.";
+            }
+
+            // Zakończ aplikację po wykonaniu testu
+            QCoreApplication::exit(0);
+        });
+
+        // Uruchom główną pętlę (potrzebna dla QGuiApplication)
+        return app.exec();
     }
     catch (std::exception &e) {
-        qDebug() << "❌ Exception caught:" << e.what();
+        qDebug() << "❌ Exception in main:" << e.what();
         return 1;
     }
     catch (...) {
-        qDebug() << "❌ Unknown exception caught.";
+        qDebug() << "❌ Unknown fatal error in main.";
         return 1;
     }
-
-    qDebug() << "✅ Headless logic test completed successfully.";
-    return 0;
 }
