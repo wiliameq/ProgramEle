@@ -1,6 +1,7 @@
 #include "CalloutItem.h"
 #include <QGraphicsSceneMouseEvent>
 #include <QGraphicsSceneHoverEvent>
+#include <QCursor>
 #include <QPainter>
 #include <QTextDocument>
 #include <QLineF>
@@ -260,14 +261,14 @@ void CalloutItem::hoverMoveEvent(QGraphicsSceneHoverEvent *event) {
     switch (h) {
         case Handle::TopLeft:
         case Handle::BottomRight:
-            setCursor(Qt::SizeFDiagCursor);
+            setCursor(QCursor(Qt::SizeFDiagCursor));
             break;
         case Handle::TopRight:
         case Handle::BottomLeft:
-            setCursor(Qt::SizeBDiagCursor);
+            setCursor(QCursor(Qt::SizeBDiagCursor));
             break;
         case Handle::Anchor:
-            setCursor(Qt::CrossCursor);
+            setCursor(QCursor(Qt::CrossCursor));
             break;
         default:
             unsetCursor();
