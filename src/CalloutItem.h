@@ -40,6 +40,8 @@ private:
     enum class Handle { None, TopLeft, TopRight, BottomLeft, BottomRight, Anchor };
     Handle handleAt(const QPointF &pos) const;
     QRectF handleRect(Handle h) const;
+    void applyHandleDrag(const QPointF &delta);
+    void enforceMinimumSize(Handle handle);
     void updateHandles();
     void updateTextLayout();
     QPointF calculateEdgeIntersection(const QPointF &anchorItemPos) const;
