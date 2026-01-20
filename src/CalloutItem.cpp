@@ -14,7 +14,6 @@ constexpr qreal kHandleSize = 10.0;
 constexpr qreal kMinWidth = 80.0;
 constexpr qreal kMinHeight = 50.0;
 constexpr qreal kTailWidth = 20.0;
-constexpr qreal kTailLength = 30.0;
 }
 
 CalloutItem::CalloutItem(const QPointF &anchorPos, QGraphicsItem *parent)
@@ -28,6 +27,7 @@ CalloutItem::CalloutItem(const QPointF &anchorPos, QGraphicsItem *parent)
     m_textItem->setDefaultTextColor(m_textColor);
     m_textItem->setFont(m_textFont);
     m_textItem->setTextWidth(200);
+    connect(m_textItem->document(), &QTextDocument::contentsChanged, this, &CalloutItem::updateTextLayout);
     updateTextLayout();
 }
 
@@ -48,9 +48,7 @@ void CalloutItem::paint(QPainter *painter, const QStyleOptionGraphicsItem *, QWi
     QPointF anchorItemPos = mapFromScene(m_anchorScenePos);
     QPointF edgePoint = calculateEdgeIntersection(anchorItemPos);
 
-    QLineF tailLine(edgePoint, anchorItemPos);
-    tailLine.setLength(kTailLength);
-    QPointF tip = tailLine.p2();
+    QPointF tip = anchorItemPos;
 
     QLineF base(edgePoint, tip);
     QLineF perp = base.normalVector();
@@ -195,7 +193,9 @@ CalloutItem::Handle CalloutItem::handleAt(const QPointF &pos) const {
 QPointF CalloutItem::calculateEdgeIntersection(const QPointF &anchorItemPos) const {
     QPointF center = m_rect.center();
     QPointF direction = anchorItemPos - center;
-    if (qAbs(direction.x()) < 0.001 && qAbs(direction.y()) < 0.001) {
+    if (m_rect.contains(anchorItemPos)) {
+        direction = QPointF(0.0, 1.0);
+    } else if (qAbs(direction.x()) < 0.001 && qAbs(direction.y()) < 0.001) {
         direction = QPointF(0.0, 1.0);
     }
     QLineF ray(center, center + direction);
@@ -244,6 +244,7 @@ void CalloutItem::setFont(const QFont &font) {
 }
 
 void CalloutItem::setAnchorPos(const QPointF &scenePos) {
+    prepareGeometryChange();
     m_anchorScenePos = scenePos;
     updateHandles();
     update();
@@ -288,6 +289,7 @@ void CalloutItem::mouseMoveEvent(QGraphicsSceneMouseEvent *event) {
     }
 
     if (m_activeHandle == Handle::Anchor) {
+        prepareGeometryChange();
         m_anchorScenePos = mapToScene(event->pos());
         updateHandles();
         update();
