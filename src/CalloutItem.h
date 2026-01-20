@@ -4,6 +4,7 @@
 #include <QGraphicsTextItem>
 #include <QColor>
 #include <QFont>
+#include <array>
 
 class CalloutItem : public QGraphicsObject {
     Q_OBJECT
@@ -29,13 +30,19 @@ signals:
     void editingFinished(CalloutItem *item);
 
 protected:
+    void mousePressEvent(QGraphicsSceneMouseEvent *event) override;
     void mouseDoubleClickEvent(QGraphicsSceneMouseEvent *event) override;
     void mouseMoveEvent(QGraphicsSceneMouseEvent *event) override;
     void mouseReleaseEvent(QGraphicsSceneMouseEvent *event) override;
+    void hoverMoveEvent(QGraphicsSceneHoverEvent *event) override;
 
 private:
+    enum class Handle { None, TopLeft, TopRight, BottomLeft, BottomRight, Anchor };
+    Handle handleAt(const QPointF &pos) const;
+    QRectF handleRect(Handle h) const;
+    void updateHandles();
     void updateTextLayout();
-    QPointF findNearestEdgePoint(const QPointF &anchorItemPos) const;
+    QPointF calculateEdgeIntersection(const QPointF &anchorItemPos) const;
 
     QGraphicsTextItem *m_textItem {nullptr};
     QRectF m_rect {0, 0, 200, 100};
@@ -47,4 +54,6 @@ private:
     QFont m_textFont {"Arial", 10};
 
     bool m_editing {false};
+    Handle m_activeHandle {Handle::None};
+    std::array<QRectF, 5> m_handles;
 };
