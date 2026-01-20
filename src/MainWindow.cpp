@@ -83,7 +83,7 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent) {
         statusBar()->showMessage(tr("Wybrano obiekt: %1").arg(obj), 3000);
     });
     connect(m_projectDock, &ProjectNavigatorWidget::contextToolSelected, this,
-            [this](const QString& category, const QString& item) {
+            [this](const QString&, const QString& item) {
         // Kliknięcie w element w drzewie projektu służy teraz do
         // przełączania widoczności warstw na płótnie.  Wysłane zostają
         // informacje o nazwie kategorii i liścia (warstwy).  Wywołujemy
@@ -114,7 +114,7 @@ void MainWindow::createMenus() {
     auto fileMenu = menuBar()->addMenu("Plik");
     auto openBg = fileMenu->addAction("Otwórz tło...");
     connect(openBg, &QAction::triggered, this, &MainWindow::onOpenBackground);
-    auto projMenu = menuBar()->addMenu("Projekt");
+    menuBar()->addMenu("Projekt");
     // Usunięto opcję ustawień z menu Projekt – ustawienia pomiarów są dostępne w menu Pomiary
     auto measMenu = menuBar()->addMenu("Pomiary");
     // W menu pomiarów dodaj opcję otwierającą dialog ustawień pomiarów
@@ -630,7 +630,6 @@ void MainWindow::showMeasurementControls(bool withUndoRedo) {
         QColor chosen = QColorDialog::getColor(m_settings.defaultMeasureColor, this, QString::fromUtf8("Wybierz domyślny kolor linii"));
         if (!chosen.isValid()) return;
         if (chosen == m_settings.defaultMeasureColor) return;
-        QColor old = m_settings.defaultMeasureColor;
         m_settings.defaultMeasureColor = chosen;
         // Zapytaj o aktualizację istniejących pomiarów
         if (m_canvas->hasAnyMeasure()) {
@@ -659,7 +658,6 @@ void MainWindow::showMeasurementControls(bool withUndoRedo) {
                                      &ok);
         if (!ok) return;
         if (v == m_settings.lineWidthPx) return;
-        int old = m_settings.lineWidthPx;
         m_settings.lineWidthPx = v;
         if (m_canvas->hasAnyMeasure()) {
             if (QMessageBox::question(this,
