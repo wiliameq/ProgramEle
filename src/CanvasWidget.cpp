@@ -1250,12 +1250,7 @@ void CanvasWidget::mousePressEvent(QMouseEvent* ev) {
                 QWidget::mousePressEvent(ev);
                 return;
             }
-            if (m_hasTempTextItem) {
-                commitTempTextItem();
-            } else if (m_editingTextIndex >= 0) {
-                commitTextEdit();
-            }
-            return;
+            commitActiveTextEdit();
         }
         // Jeśli tymczasowy dymek jeszcze nie istnieje, to klik
         // ustawia pozycję kotwicy i rozpoczyna edycję.  Utwórz
@@ -1861,6 +1856,18 @@ void CanvasWidget::cancelTempTextItem() {
     emit measurementFinished();
 }
 
+void CanvasWidget::commitActiveTextEdit() {
+    if (m_isCommittingText) return;
+    if (!m_textEdit) return;
+    m_isCommittingText = true;
+    if (m_hasTempTextItem) {
+        commitTempTextItem();
+    } else if (m_editingTextIndex >= 0) {
+        commitTextEdit();
+    }
+    m_isCommittingText = false;
+}
+
 void CanvasWidget::cancelTextEdit() {
     // Anuluj edycję bez zapisu
     if (m_textEdit) {
@@ -1953,22 +1960,12 @@ bool CanvasWidget::eventFilter(QObject* obj, QEvent* event) {
             auto *keyEv = static_cast<QKeyEvent*>(event);
             if ((keyEv->key() == Qt::Key_Return || keyEv->key() == Qt::Key_Enter)
                 && keyEv->modifiers().testFlag(Qt::ControlModifier)) {
-                if (m_hasTempTextItem) {
-                    commitTempTextItem();
-                    return true;
-                }
-                if (m_editingTextIndex >= 0) {
-                    commitTextEdit();
-                    return true;
-                }
+                commitActiveTextEdit();
+                return true;
             }
         }
         if (event->type() == QEvent::FocusOut) {
-            if (m_hasTempTextItem) {
-                commitTempTextItem();
-            } else if (m_editingTextIndex >= 0) {
-                commitTextEdit();
-            }
+            commitActiveTextEdit();
         }
     }
     return QWidget::eventFilter(obj, event);
