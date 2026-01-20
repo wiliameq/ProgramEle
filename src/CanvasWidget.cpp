@@ -1049,7 +1049,7 @@ void CanvasWidget::drawOverlay(QPainter& p) {
 
 void CanvasWidget::mousePressEvent(QMouseEvent* ev) {
     if (ev->button() == Qt::RightButton) {
-        QPointF pos = toWorld(ev->localPos());
+        QPointF pos = toWorld(ev->position());
         if (m_mode == ToolMode::Select) {
             double marginWorldX = 0.0;
             double marginWorldY = 0.0;
@@ -1068,7 +1068,7 @@ void CanvasWidget::mousePressEvent(QMouseEvent* ev) {
         }
         m_isPanning = true; m_lastMouseScreen = ev->position(); return;
     }
-    QPointF pos = toWorld(ev->localPos());
+    QPointF pos = toWorld(ev->position());
     if (m_mode == ToolMode::DefineScale) {
         if (!m_hasFirst) { m_firstPoint = pos; m_hasFirst = true; }
         else { defineScalePromptAndApply(pos); m_hasFirst = false; m_mode = ToolMode::None; }
@@ -1394,7 +1394,7 @@ void CanvasWidget::mouseDoubleClickEvent(QMouseEvent* ev) {
         return;
     }
     if (m_mode == ToolMode::Select) {
-        QPointF wpos = toWorld(ev->localPos());
+        QPointF wpos = toWorld(ev->position());
         double marginWorldX = 0.0;
         double marginWorldY = 0.0;
         if (m_pixelsPerMeter * m_zoom != 0.0) {
@@ -1515,7 +1515,7 @@ void CanvasWidget::mouseMoveEvent(QMouseEvent* ev) {
         if (m_isDraggingTempBubble) {
             // Przesuwamy boundingRect względem kotwicy i korygujemy kotwicę
             // tak, aby pozostała poza dymkiem.
-            QPointF wpos = toWorld(ev->localPos());
+            QPointF wpos = toWorld(ev->position());
             QPointF newTopLeft = wpos - m_tempDragOffset;
             QPointF delta = newTopLeft - m_tempTextItem.boundingRect.topLeft();
             m_tempTextItem.boundingRect.translate(delta.x(), delta.y());
@@ -1533,7 +1533,7 @@ void CanvasWidget::mouseMoveEvent(QMouseEvent* ev) {
         }
         if (m_isDraggingTempAnchor) {
             // Zmień pozycję kotwicy bez przesuwania dymka
-            QPointF wpos = toWorld(ev->localPos());
+            QPointF wpos = toWorld(ev->position());
             m_tempTextItem.anchor = anchorFromPosition(m_tempTextItem.boundingRect, wpos);
             double gapWorld = (m_pixelsPerMeter * m_zoom != 0.0)
                 ? 12.0 / (m_pixelsPerMeter * m_zoom)
@@ -1551,7 +1551,7 @@ void CanvasWidget::mouseMoveEvent(QMouseEvent* ev) {
         if (m_isDraggingSelectedText) {
             // Przeciąganie całego dymka – przesuwamy boundingRect i pilnujemy
             // aby kotwica nie znalazła się wewnątrz dymka.
-            QPointF wpos = toWorld(ev->localPos());
+            QPointF wpos = toWorld(ev->position());
             TextItem &ti = m_textItems[m_selectedTextIndex];
             QPointF newTopLeft = wpos - m_dragStartOffset;
             QPointF delta = newTopLeft - ti.boundingRect.topLeft();
@@ -1565,7 +1565,7 @@ void CanvasWidget::mouseMoveEvent(QMouseEvent* ev) {
         }
         if (m_isDraggingSelectedAnchor) {
             // Przeciąganie kotwicy bez przesuwania dymka
-            QPointF wpos = toWorld(ev->localPos());
+            QPointF wpos = toWorld(ev->position());
             TextItem &ti = m_textItems[m_selectedTextIndex];
             ti.anchor = anchorFromPosition(ti.boundingRect, wpos);
             double gapWorld = (m_pixelsPerMeter * m_zoom != 0.0)
@@ -1576,7 +1576,7 @@ void CanvasWidget::mouseMoveEvent(QMouseEvent* ev) {
             return;
         }
     }
-    m_mouseWorld = toWorld(ev->localPos());
+    m_mouseWorld = toWorld(ev->position());
     m_hasMouseWorld = true;
     update();
     QWidget::mouseMoveEvent(ev);
