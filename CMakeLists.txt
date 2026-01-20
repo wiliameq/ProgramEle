@@ -19,3 +19,6 @@ add_executable(${PROJECT_NAME}
     src/CalloutItem.h src/CalloutItem.cpp
 )
 target_link_libraries(${PROJECT_NAME} PRIVATE Qt6::Widgets Qt6::Gui Qt6::Core Qt6::Pdf Qt6::PrintSupport)
+# --- Test headless (for Codex) ---
+add_executable(TestProgramEle src/test_main.cpp)
+target_link_libraries(TestProgramEle PRIVATE Qt6::Core)
