@@ -1,5 +1,4 @@
 #include "CalloutItem.h"
-
 #include <QGraphicsSceneMouseEvent>
 #include <QPainter>
 #include <QTextDocument>
@@ -7,36 +6,33 @@
 
 namespace {
 constexpr qreal kCornerRadius = 6.0;
-constexpr qreal kPadding = 8.0;
-constexpr qreal kTailWidth = 18.0;
-constexpr qreal kTailLength = 24.0;
+constexpr qreal kPadding = 10.0;
+constexpr qreal kTailWidth = 20.0;
+constexpr qreal kTailLength = 30.0;
 }
 
 CalloutItem::CalloutItem(const QPointF &anchorPos, QGraphicsItem *parent)
     : QGraphicsObject(parent),
       m_anchorScenePos(anchorPos) {
-
-    setFlags(QGraphicsItem::ItemIsSelectable | QGraphicsItem::ItemIsMovable);
+    setFlags(QGraphicsItem::ItemIsMovable | QGraphicsItem::ItemIsSelectable);
     setAcceptHoverEvents(true);
 
     m_textItem = new QGraphicsTextItem(this);
-    m_textItem->setPlainText(QStringLiteral("Double-click to edit"));
+    m_textItem->setPlainText("Double-click to add a comment...");
     m_textItem->setDefaultTextColor(m_textColor);
     m_textItem->setFont(m_textFont);
-
+    m_textItem->setTextWidth(200);
     updateTextLayout();
-    ensureAnchorBelowBubble();
 }
 
 QRectF CalloutItem::boundingRect() const {
-    const QPointF anchorItemPos = mapFromScene(m_anchorScenePos);
-    QRectF bounds = m_rect.united(QRectF(anchorItemPos, QSizeF(1, 1)).normalized());
-    return bounds.adjusted(-4, -4, 4, 4);
+    QPointF anchorItemPos = mapFromScene(m_anchorScenePos);
+    QRectF rect = m_rect.united(QRectF(anchorItemPos, QSizeF(1, 1)).normalized());
+    return rect.adjusted(-5, -5, 5, 5);
 }
 
 void CalloutItem::paint(QPainter *painter, const QStyleOptionGraphicsItem *, QWidget *) {
     painter->setRenderHint(QPainter::Antialiasing);
-
     painter->setBrush(m_bubbleFill);
     painter->setPen(QPen(m_bubbleBorder, 2));
 
@@ -44,38 +40,36 @@ void CalloutItem::paint(QPainter *painter, const QStyleOptionGraphicsItem *, QWi
     path.addRoundedRect(m_rect, kCornerRadius, kCornerRadius);
 
     QPointF anchorItemPos = mapFromScene(m_anchorScenePos);
-    QPointF center = m_rect.center();
+    QPointF edgePoint = findNearestEdgePoint(anchorItemPos);
 
-    QLineF line(center, anchorItemPos);
+    QLineF line(edgePoint, anchorItemPos);
     line.setLength(kTailLength);
     QPointF tip = line.p2();
 
-    QPointF left = center + QPointF(-kTailWidth / 2, 0);
-    QPointF right = center + QPointF(kTailWidth / 2, 0);
+    QPointF left = edgePoint + QPointF(-kTailWidth / 2, 0);
+    QPointF right = edgePoint + QPointF(kTailWidth / 2, 0);
 
     QPolygonF tail;
     tail << left << tip << right;
-
     path.addPolygon(tail);
+
     painter->drawPath(path);
 }
 
 void CalloutItem::updateTextLayout() {
     prepareGeometryChange();
-    QRectF textRect = m_textItem->boundingRect();
-    m_rect = textRect.adjusted(-kPadding, -kPadding, kPadding, kPadding);
-    m_textItem->setPos(m_rect.topLeft() + QPointF(kPadding, kPadding));
+    QSizeF docSize = m_textItem->document()->size();
+    m_rect = QRectF(0, 0, docSize.width() + 2 * kPadding, docSize.height() + 2 * kPadding);
+    m_textItem->setPos(kPadding, kPadding);
 }
 
-void CalloutItem::ensureAnchorBelowBubble() {
-    if (m_anchorScenePos.isNull())
-        return;
-
-    QPointF localAnchor = mapFromScene(m_anchorScenePos);
-    if (localAnchor.y() > m_rect.bottom())
-        return;
-
-    setPos(pos().x(), pos().y() + (m_rect.height() + kTailLength));
+QPointF CalloutItem::findNearestEdgePoint(const QPointF &anchorItemPos) const {
+    QPointF p = m_rect.center();
+    if (anchorItemPos.x() < m_rect.left()) p.setX(m_rect.left());
+    if (anchorItemPos.x() > m_rect.right()) p.setX(m_rect.right());
+    if (anchorItemPos.y() < m_rect.top()) p.setY(m_rect.top());
+    if (anchorItemPos.y() > m_rect.bottom()) p.setY(m_rect.bottom());
+    return p;
 }
 
 void CalloutItem::setTextColor(const QColor &color) {
@@ -100,6 +94,11 @@ void CalloutItem::setFont(const QFont &font) {
     updateTextLayout();
 }
 
+void CalloutItem::setAnchorPos(const QPointF &scenePos) {
+    m_anchorScenePos = scenePos;
+    update();
+}
+
 void CalloutItem::startEditing() {
     m_editing = true;
     m_textItem->setTextInteractionFlags(Qt::TextEditorInteraction);
@@ -117,13 +116,10 @@ bool CalloutItem::isEditing() const {
     return m_editing;
 }
 
-void CalloutItem::setAnchorPos(const QPointF &scenePos) {
-    m_anchorScenePos = scenePos;
-    update();
-}
-
-void CalloutItem::mousePressEvent(QGraphicsSceneMouseEvent *event) {
-    QGraphicsItem::mousePressEvent(event);
+void CalloutItem::mouseDoubleClickEvent(QGraphicsSceneMouseEvent *event) {
+    Q_UNUSED(event)
+    if (!m_editing) startEditing();
+    else finishEditing();
 }
 
 void CalloutItem::mouseMoveEvent(QGraphicsSceneMouseEvent *event) {
@@ -132,8 +128,5 @@ void CalloutItem::mouseMoveEvent(QGraphicsSceneMouseEvent *event) {
 
 void CalloutItem::mouseReleaseEvent(QGraphicsSceneMouseEvent *event) {
     QGraphicsItem::mouseReleaseEvent(event);
-}
-
-void CalloutItem::hoverMoveEvent(QGraphicsSceneHoverEvent *event) {
-    QGraphicsItem::hoverMoveEvent(event);
+    updateTextLayout();
 }
