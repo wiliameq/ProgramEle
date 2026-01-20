@@ -1,4 +1,4 @@
-name: 🧱 Build and Test ProgramEle (Qt 6)
+name: 🧱 Build and Test ProgramEle (Qt 6 - Stable)
 
 on:
   push:
@@ -12,14 +12,14 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      # --- Pobranie repozytorium ---
+      # --- 1️⃣ Pobranie repozytorium ---
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      # --- Instalacja środowiska Qt6 i narzędzi budowania ---
+      # --- 2️⃣ Instalacja środowiska Qt6 i narzędzi budowania ---
       - name: Install Qt6 and dependencies
         run: |
-          sudo apt update
+          sudo apt update -y
           sudo apt install -y \
             qt6-base-dev \
             qt6-base-dev-tools \
@@ -28,59 +28,74 @@ jobs:
             qt6-declarative-dev \
             qt6-pdf-dev \
             cmake ninja-build g++
-          echo "✅ Qt6 successfully installed"
+          echo "✅ Qt6 and build tools installed successfully."
 
-      # --- Diagnostyka Qt (opcjonalna, pokazuje konfigurację) ---
+      # --- 3️⃣ Diagnostyka Qt6 (pokaże gdzie CMake widzi pliki Qt) ---
       - name: Verify Qt installation
         run: |
-          qmake6 -v || echo "⚠️ qmake6 not found (ok if using pure CMake)"
-          ls -l /usr/lib/x86_64-linux-gnu/cmake/Qt6* || true
+          echo "🧩 Checking Qt6 installation paths..."
+          qmake6 -v || echo "ℹ️ qmake6 not found (fine for CMake-only builds)"
+          ls -d /usr/lib/x86_64-linux-gnu/cmake/Qt6* || echo "⚠️ Qt6 cmake modules not found!"
 
-      # --- Konfiguracja projektu przez CMake ---
-      - name: Configure project (CMake)
+      # --- 4️⃣ Konfiguracja projektu przez CMake ---
+      - name: Configure CMake project
         run: |
+          echo "⚙️ Configuring CMake project..."
           cmake -S . -B build -G Ninja \
             -DCMAKE_BUILD_TYPE=Release \
             -DCMAKE_PREFIX_PATH=/usr/lib/x86_64-linux-gnu/cmake/Qt6
+          echo "✅ CMake configuration completed."
 
-      # --- Kompilacja projektu ---
+      # --- 5️⃣ Kompilacja projektu ---
       - name: Build project
         run: |
-          cmake --build build --parallel
-          echo "✅ ProgramEle built successfully"
+          echo "🛠️ Building project..."
+          cmake --build build --parallel || { echo "❌ Build failed"; exit 1; }
+          echo "✅ ProgramEle built successfully."
 
-      # --- Test podstawowy (czy główny plik binarny się buduje) ---
-      - name: Run main binary (headless)
+      # --- 6️⃣ Sprawdzenie czy główny plik binarny istnieje ---
+      - name: Check main binary
         run: |
           if [ -f build/ProgramEle ]; then
-            echo "Binary found, running smoke test..."
-            xvfb-run -a ./build/ProgramEle --version || echo "ℹ️ GUI app cannot display output (expected)"
+            echo "✅ Found main binary: ProgramEle"
           else
-            echo "⚠️ ProgramEle binary not found!"
-            ls -R build
+            echo "⚠️ Main binary not found — listing contents of build directory:"
+            ls -R build || true
           fi
 
-      # --- Uruchomienie testu headless (dla CODEX) ---
+      # --- 7️⃣ Test podstawowy (uruchomienie bez GUI) ---
+      - name: Run main binary (headless test)
+        run: |
+          if [ -f build/ProgramEle ]; then
+            echo "🚀 Running headless smoke test..."
+            xvfb-run -a ./build/ProgramEle --version || echo "ℹ️ GUI app cannot show window (expected)."
+          else
+            echo "⚠️ ProgramEle binary missing, skipping GUI run."
+          fi
+
+      # --- 8️⃣ Test headless (dla CODEX) ---
       - name: Run Codex headless logic test
         run: |
           if [ -f build/TestProgramEle ]; then
             echo "🧪 Running Codex headless logic test..."
-            ./build/TestProgramEle
+            ./build/TestProgramEle || { echo '❌ TestProgramEle failed'; exit 1; }
+            echo "✅ Headless logic test finished successfully."
           else
-            echo "⚠️ TestProgramEle binary not found!"
-            ls -R build
+            echo "⚠️ TestProgramEle binary not found — skipping test."
+            ls -R build || true
           fi
 
-      # --- Publikacja artefaktów (binarek) ---
+      # --- 9️⃣ Publikacja artefaktów (binarki do pobrania) ---
       - name: Upload build artifacts
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: ProgramEle-build
           path: |
             build/ProgramEle*
             build/TestProgramEle*
-          if-no-files-found: ignore
+          if-no-files-found: warn
 
-      # --- Zakończenie procesu ---
+      # --- 🔟 Zakończenie ---
       - name: Build finished
         run: echo "🎉 Qt6 build & test pipeline completed successfully!"
