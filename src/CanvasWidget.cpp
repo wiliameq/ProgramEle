@@ -780,7 +780,7 @@ void CanvasWidget::paintEvent(QPaintEvent*) {
 
     p.resetTransform();
     p.setPen(Qt::gray);
-    p.drawText(10, height()-10, "PPM: pan, kółko/+/-: zoom; Pomiary: menu; Enter kończy; Backspace cofa; Esc anuluje");
+    p.drawText(10, height()-10, "PPM: pan, kółko/+/-: zoom; Pomiary: menu; Enter kończy; Ctrl+Enter zatwierdza komentarz; Backspace cofa; Esc anuluje");
 }
 
 void CanvasWidget::drawMeasures(QPainter& p) {
@@ -1242,13 +1242,20 @@ void CanvasWidget::mousePressEvent(QMouseEvent* ev) {
         }
         // Jeżeli aktywne jest pole edycyjne (użytkownik wpisuje tekst)
         // i kliknięcie znajduje się wewnątrz tego pola, pozwól mu
-        // obsłużyć zdarzenie bezpośrednio.
+        // obsłużyć zdarzenie bezpośrednio. Kliknięcie poza polem
+        // zatwierdza bieżącą edycję (jak w edytorach tekstu).
         if (m_textEdit) {
             QRect geom = m_textEdit->geometry();
             if (geom.contains(ev->position().toPoint())) {
                 QWidget::mousePressEvent(ev);
                 return;
             }
+            if (m_hasTempTextItem) {
+                commitTempTextItem();
+            } else if (m_editingTextIndex >= 0) {
+                commitTextEdit();
+            }
+            return;
         }
         // Jeśli tymczasowy dymek jeszcze nie istnieje, to klik
         // ustawia pozycję kotwicy i rozpoczyna edycję.  Utwórz
@@ -1279,7 +1286,7 @@ void CanvasWidget::mousePressEvent(QMouseEvent* ev) {
                 m_tempTextItem.boundingRect.translate(0.0, -shift);
             }
         }
-        m_isTempBubblePinned = true;
+        m_isTempBubblePinned = false;
         // Utwórz pole edycyjne na płótnie
         if (m_textEdit) {
             // Nie powinno mieć miejsca, ale dla pewności usuń stare pole
@@ -1887,16 +1894,6 @@ void CanvasWidget::keyPressEvent(QKeyEvent* ev) {
         case Qt::Key_Enter:
             if (m_mode == ToolMode::MeasurePolyline || m_mode == ToolMode::MeasureAdvanced) {
                 finishCurrentMeasure(this);
-            } else if (m_mode == ToolMode::InsertText) {
-                // W trybie wstawiania tekstu zatwierdź tymczasowy dymek
-                // lub edycję istniejącego tekstu.  Jeśli trwa wstawianie
-                // tymczasowego dymka, commitTempTextItem() zajmie się
-                // usunięciem pola edycyjnego i dodaniem elementu.
-                if (m_hasTempTextItem) {
-                    commitTempTextItem();
-                } else if (m_textEdit) {
-                    commitTextEdit();
-                }
             }
             break;
         case Qt::Key_Backspace:
@@ -1951,19 +1948,26 @@ void CanvasWidget::keyPressEvent(QKeyEvent* ev) {
 }
 
 bool CanvasWidget::eventFilter(QObject* obj, QEvent* event) {
-    if (obj == m_textEdit && event->type() == QEvent::KeyPress) {
-        auto *keyEv = static_cast<QKeyEvent*>(event);
-        if (keyEv->key() == Qt::Key_Return || keyEv->key() == Qt::Key_Enter) {
-            if (keyEv->modifiers().testFlag(Qt::ShiftModifier)) {
-                return false;
+    if (obj == m_textEdit) {
+        if (event->type() == QEvent::KeyPress) {
+            auto *keyEv = static_cast<QKeyEvent*>(event);
+            if ((keyEv->key() == Qt::Key_Return || keyEv->key() == Qt::Key_Enter)
+                && keyEv->modifiers().testFlag(Qt::ControlModifier)) {
+                if (m_hasTempTextItem) {
+                    commitTempTextItem();
+                    return true;
+                }
+                if (m_editingTextIndex >= 0) {
+                    commitTextEdit();
+                    return true;
+                }
             }
+        }
+        if (event->type() == QEvent::FocusOut) {
             if (m_hasTempTextItem) {
                 commitTempTextItem();
-                return true;
-            }
-            if (m_editingTextIndex >= 0) {
+            } else if (m_editingTextIndex >= 0) {
                 commitTextEdit();
-                return true;
             }
         }
     }
