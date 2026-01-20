@@ -158,6 +158,7 @@ protected:
     bool eventFilter(QObject* obj, QEvent* event) override;
 
 private:
+    void commitActiveTextEdit();
     // Settings
     ProjectSettings* m_settings = nullptr;
 
@@ -235,6 +236,7 @@ private:
     // Flaga przeciągania kotwicy wybranego elementu w trybie Select.
     // Pozwala rozróżnić przeciąganie dymka od przeciągania końca strzałki.
     bool m_isDraggingSelectedAnchor = false;
+    bool m_isCommittingText = false;
 
     // Oblicza boundingRect dla m_tempTextItem na podstawie jego treści,
     // czcionki, pozycji kotwicy oraz kierunku strzałki.  Funkcja ta
