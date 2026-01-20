@@ -46,25 +46,19 @@ protected:
     void mousePressEvent(QGraphicsSceneMouseEvent *event) override;
     void mouseMoveEvent(QGraphicsSceneMouseEvent *event) override;
     void mouseReleaseEvent(QGraphicsSceneMouseEvent *event) override;
-    void mouseDoubleClickEvent(QGraphicsSceneMouseEvent *event) override;
+    void hoverMoveEvent(QGraphicsSceneHoverEvent *event) override;
 
 private:
-    Handle handleAt(const QPointF &scenePos) const;
     void updateTextLayout();
     void ensureAnchorBelowBubble();
 
-    QGraphicsTextItem *m_textItem = nullptr;
-    QRectF m_rect{0, 0, 160, 80};
-    QPointF m_anchorScenePos;
-    QColor m_textColor = Qt::black;
-    QColor m_bubbleFill = QColor(255, 255, 255, 200);
-    QColor m_bubbleBorder = Qt::black;
-    QFont m_textFont;
-    bool m_userResized = false;
+    QGraphicsTextItem *m_textItem {nullptr};
+    QRectF m_rect {0, 0, 200, 100};
 
-    Handle m_activeHandle = Handle::None;
-    QRectF m_startRect;
-    QPointF m_startPos;
-    QPointF m_startAnchor;
-    QPointF m_dragOffset;
+    QPointF m_anchorScenePos;
+    QColor m_textColor {Qt::black};
+    QColor m_bubbleFill {QColor(255, 255, 220)};
+    QColor m_bubbleBorder {Qt::black};
+    QFont m_textFont {"Arial", 10};
+    bool m_editing {false};
 };
