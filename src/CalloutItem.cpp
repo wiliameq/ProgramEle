@@ -16,21 +16,33 @@ constexpr qreal kMinHeight = 50.0;
 constexpr qreal kTailWidth = 20.0;
 }
 
+// ======================================================
+//  Konstruktor — BEZPIECZNY dla środowisk bez sceny
+// ======================================================
 CalloutItem::CalloutItem(const QPointF &anchorPos, QGraphicsItem *parent)
     : QGraphicsObject(parent),
       m_anchorScenePos(anchorPos) {
     setFlags(QGraphicsItem::ItemIsMovable | QGraphicsItem::ItemIsSelectable);
     setAcceptHoverEvents(true);
 
+    // Bezpieczna inicjalizacja tekstu — bez natychmiastowego layoutu
     m_textItem = new QGraphicsTextItem(this);
     m_textItem->setPlainText("Double-click to add a comment...");
     m_textItem->setDefaultTextColor(m_textColor);
     m_textItem->setFont(m_textFont);
-    m_textItem->setTextWidth(200);
-    connect(m_textItem->document(), &QTextDocument::contentsChanged, this, &CalloutItem::updateTextLayout);
-    updateTextLayout();
+
+    // Połączenie sygnału: layout tylko, gdy obiekt w scenie
+    QObject::connect(m_textItem->document(), &QTextDocument::contentsChanged,
+                     this, [this]() {
+                         if (scene()) updateTextLayout();
+                     });
+
+    // Nie wywołujemy updateTextLayout() tutaj — w testach brak sceny
 }
 
+// ======================================================
+//  Główna geometria i rysowanie
+// ======================================================
 QRectF CalloutItem::boundingRect() const {
     QPointF anchorItemPos = mapFromScene(m_anchorScenePos);
     QRectF rect = m_rect.united(QRectF(anchorItemPos, QSizeF(1, 1)).normalized());
@@ -49,7 +61,6 @@ void CalloutItem::paint(QPainter *painter, const QStyleOptionGraphicsItem *, QWi
     QPointF edgePoint = calculateEdgeIntersection(anchorItemPos);
 
     QPointF tip = anchorItemPos;
-
     QLineF base(edgePoint, tip);
     QLineF perp = base.normalVector();
     perp.setLength(kTailWidth / 2);
@@ -69,7 +80,13 @@ void CalloutItem::paint(QPainter *painter, const QStyleOptionGraphicsItem *, QWi
     }
 }
 
+// ======================================================
+//  Układ tekstu — BEZPIECZNY w środowisku bez sceny
+// ======================================================
 void CalloutItem::updateTextLayout() {
+    if (!m_textItem) return;
+    if (!scene()) return; // Zapobiega crashowi bez kontekstu graficznego
+
     prepareGeometryChange();
     m_rect = m_rect.normalized();
     if (m_rect.width() < kMinWidth) {
@@ -82,10 +99,14 @@ void CalloutItem::updateTextLayout() {
     qreal textWidth = qMax<qreal>(10.0, m_rect.width() - 2 * kPadding);
     m_textItem->setTextWidth(textWidth);
     m_textItem->setPos(m_rect.left() + kPadding, m_rect.top() + kPadding);
+
     updateHandles();
     update();
 }
 
+// ======================================================
+//  Funkcje pomocnicze dla uchwytów i wymiarów
+// ======================================================
 void CalloutItem::applyHandleDrag(const QPointF &delta) {
     switch (m_activeHandle) {
         case Handle::TopLeft:
@@ -190,6 +211,9 @@ CalloutItem::Handle CalloutItem::handleAt(const QPointF &pos) const {
     return Handle::None;
 }
 
+// ======================================================
+//  Obliczanie grota dymka
+// ======================================================
 QPointF CalloutItem::calculateEdgeIntersection(const QPointF &anchorItemPos) const {
     QPointF center = m_rect.center();
     QPointF direction = anchorItemPos - center;
@@ -221,9 +245,12 @@ QPointF CalloutItem::calculateEdgeIntersection(const QPointF &anchorItemPos) con
     return intersect.isNull() ? center : intersect;
 }
 
+// ======================================================
+//  Settery, edycja, zdarzenia myszki
+// ======================================================
 void CalloutItem::setTextColor(const QColor &color) {
     m_textColor = color;
-    m_textItem->setDefaultTextColor(color);
+    if (m_textItem) m_textItem->setDefaultTextColor(color);
     update();
 }
 
@@ -239,8 +266,8 @@ void CalloutItem::setBubbleBorder(const QColor &color) {
 
 void CalloutItem::setFont(const QFont &font) {
     m_textFont = font;
-    m_textItem->setFont(font);
-    updateTextLayout();
+    if (m_textItem) m_textItem->setFont(font);
+    if (scene()) updateTextLayout();
 }
 
 void CalloutItem::setAnchorPos(const QPointF &scenePos) {
@@ -252,14 +279,18 @@ void CalloutItem::setAnchorPos(const QPointF &scenePos) {
 
 void CalloutItem::startEditing() {
     m_editing = true;
-    m_textItem->setTextInteractionFlags(Qt::TextEditorInteraction);
-    m_textItem->setFocus();
+    if (m_textItem) {
+        m_textItem->setTextInteractionFlags(Qt::TextEditorInteraction);
+        m_textItem->setFocus();
+    }
 }
 
 void CalloutItem::finishEditing() {
     m_editing = false;
-    m_textItem->setTextInteractionFlags(Qt::NoTextInteraction);
-    updateTextLayout();
+    if (m_textItem) {
+        m_textItem->setTextInteractionFlags(Qt::NoTextInteraction);
+    }
+    if (scene()) updateTextLayout();
     emit editingFinished(this);
 }
 
@@ -267,6 +298,9 @@ bool CalloutItem::isEditing() const {
     return m_editing;
 }
 
+// ======================================================
+//  Obsługa zdarzeń myszki
+// ======================================================
 void CalloutItem::mouseDoubleClickEvent(QGraphicsSceneMouseEvent *event) {
     Q_UNUSED(event)
     if (!m_editing) startEditing();
@@ -298,7 +332,7 @@ void CalloutItem::mouseMoveEvent(QGraphicsSceneMouseEvent *event) {
 
     QPointF delta = event->pos() - event->lastPos();
     applyHandleDrag(delta);
-    updateTextLayout();
+    if (scene()) updateTextLayout();
 }
 
 void CalloutItem::mouseReleaseEvent(QGraphicsSceneMouseEvent *event) {
