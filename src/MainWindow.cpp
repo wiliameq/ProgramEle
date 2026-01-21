@@ -25,6 +25,7 @@
 #include <QFile>
 #include <QMessageBox>
 #include <QRegularExpression>
+#include <QInputDialog>
 MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent) {
     m_canvas = new CanvasWidget(this, &m_settings);
     setCentralWidget(m_canvas);
@@ -160,6 +161,31 @@ void MainWindow::onRemoveBuilding() {
     writeProjectTempFile();
 }
 
+void MainWindow::onRenameBuilding() {
+    int index = m_buildingCombo ? m_buildingCombo->currentIndex() : -1;
+    if (index < 0 || index >= m_buildings.size()) {
+        return;
+    }
+    const QString currentName = m_buildings[index].name;
+    bool ok = false;
+    QString newName = QInputDialog::getText(
+        this,
+        QString::fromUtf8("Zmień nazwę budynku"),
+        QString::fromUtf8("Nowa nazwa:"),
+        QLineEdit::Normal,
+        currentName,
+        &ok);
+    newName = newName.trimmed();
+    if (!ok || newName.isEmpty() || newName == currentName) {
+        return;
+    }
+    m_buildings[index].name = newName;
+    if (m_buildingCombo) {
+        m_buildingCombo->setItemText(index, newName);
+    }
+    writeProjectTempFile();
+}
+
 void MainWindow::onAddFloor() {
     int index = m_buildingCombo ? m_buildingCombo->currentIndex() : -1;
     if (index < 0 || index >= m_buildings.size()) {
@@ -190,6 +216,36 @@ void MainWindow::onRemoveFloor() {
     writeProjectTempFile();
 }
 
+void MainWindow::onRenameFloor() {
+    int buildingIndex = m_buildingCombo ? m_buildingCombo->currentIndex() : -1;
+    if (buildingIndex < 0 || buildingIndex >= m_buildings.size()) {
+        return;
+    }
+    auto& building = m_buildings[buildingIndex];
+    int floorIndex = m_floorCombo ? m_floorCombo->currentIndex() : -1;
+    if (floorIndex < 0 || floorIndex >= building.floors.size()) {
+        return;
+    }
+    const QString currentName = building.floors[floorIndex];
+    bool ok = false;
+    QString newName = QInputDialog::getText(
+        this,
+        QString::fromUtf8("Zmień nazwę piętra"),
+        QString::fromUtf8("Nowa nazwa:"),
+        QLineEdit::Normal,
+        currentName,
+        &ok);
+    newName = newName.trimmed();
+    if (!ok || newName.isEmpty() || newName == currentName) {
+        return;
+    }
+    building.floors[floorIndex] = newName;
+    if (m_floorCombo) {
+        m_floorCombo->setItemText(floorIndex, newName);
+    }
+    writeProjectTempFile();
+}
+
 void MainWindow::onBuildingChanged(int index) {
     if (index < 0 || index >= m_buildings.size()) {
         return;
@@ -199,6 +255,9 @@ void MainWindow::onBuildingChanged(int index) {
     m_floorCombo->setCurrentIndex(0);
     if (m_removeFloorBtn) {
         m_removeFloorBtn->setEnabled(m_buildings[index].floors.size() > 1);
+    }
+    if (m_renameFloorBtn) {
+        m_renameFloorBtn->setEnabled(!m_buildings[index].floors.isEmpty());
     }
 }
 
@@ -271,11 +330,15 @@ void MainWindow::buildProjectPanel() {
     m_buildingCombo = new QComboBox(m_projectControls);
     auto addBuildingBtn = new QPushButton("+", m_projectControls);
     m_removeBuildingBtn = new QPushButton("-", m_projectControls);
+    m_renameBuildingBtn = new QPushButton(QString::fromUtf8("✎"), m_projectControls);
     addBuildingBtn->setFixedWidth(28);
     m_removeBuildingBtn->setFixedWidth(28);
+    m_renameBuildingBtn->setFixedWidth(28);
+    m_renameBuildingBtn->setToolTip(QString::fromUtf8("Zmień nazwę budynku"));
     buildingRow->addWidget(buildingLabel);
     buildingRow->addWidget(m_buildingCombo, 1);
     buildingRow->addWidget(addBuildingBtn);
+    buildingRow->addWidget(m_renameBuildingBtn);
     buildingRow->addWidget(m_removeBuildingBtn);
     controlsLayout->addLayout(buildingRow);
 
@@ -284,11 +347,15 @@ void MainWindow::buildProjectPanel() {
     m_floorCombo = new QComboBox(m_projectControls);
     auto addFloorBtn = new QPushButton("+", m_projectControls);
     m_removeFloorBtn = new QPushButton("-", m_projectControls);
+    m_renameFloorBtn = new QPushButton(QString::fromUtf8("✎"), m_projectControls);
     addFloorBtn->setFixedWidth(28);
     m_removeFloorBtn->setFixedWidth(28);
+    m_renameFloorBtn->setFixedWidth(28);
+    m_renameFloorBtn->setToolTip(QString::fromUtf8("Zmień nazwę piętra"));
     floorRow->addWidget(floorLabel);
     floorRow->addWidget(m_floorCombo, 1);
     floorRow->addWidget(addFloorBtn);
+    floorRow->addWidget(m_renameFloorBtn);
     floorRow->addWidget(m_removeFloorBtn);
     controlsLayout->addLayout(floorRow);
 
@@ -296,8 +363,10 @@ void MainWindow::buildProjectPanel() {
     layout->addStretch(1);
 
     connect(addBuildingBtn, &QPushButton::clicked, this, &MainWindow::onAddBuilding);
+    connect(m_renameBuildingBtn, &QPushButton::clicked, this, &MainWindow::onRenameBuilding);
     connect(m_removeBuildingBtn, &QPushButton::clicked, this, &MainWindow::onRemoveBuilding);
     connect(addFloorBtn, &QPushButton::clicked, this, &MainWindow::onAddFloor);
+    connect(m_renameFloorBtn, &QPushButton::clicked, this, &MainWindow::onRenameFloor);
     connect(m_removeFloorBtn, &QPushButton::clicked, this, &MainWindow::onRemoveFloor);
     connect(m_buildingCombo, QOverload<int>::of(&QComboBox::currentIndexChanged),
             this, &MainWindow::onBuildingChanged);
@@ -328,9 +397,15 @@ void MainWindow::refreshProjectPanel() {
         if (m_removeFloorBtn) {
             m_removeFloorBtn->setEnabled(m_buildings[buildingIndex].floors.size() > 1);
         }
+        if (m_renameFloorBtn) {
+            m_renameFloorBtn->setEnabled(!m_buildings[buildingIndex].floors.isEmpty());
+        }
     }
     if (m_removeBuildingBtn) {
         m_removeBuildingBtn->setEnabled(m_buildings.size() > 1);
+    }
+    if (m_renameBuildingBtn) {
+        m_renameBuildingBtn->setEnabled(!m_buildings.isEmpty());
     }
 }
 

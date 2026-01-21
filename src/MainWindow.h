@@ -26,8 +26,10 @@ private slots:
     void onNewProject();
     void onAddBuilding();
     void onRemoveBuilding();
+    void onRenameBuilding();
     void onAddFloor();
     void onRemoveFloor();
+    void onRenameFloor();
     void onBuildingChanged(int index);
 private:
     struct Building {
@@ -77,7 +79,9 @@ private:
     QComboBox* m_buildingCombo = nullptr;
     QComboBox* m_floorCombo = nullptr;
     QPushButton* m_removeBuildingBtn = nullptr;
+    QPushButton* m_renameBuildingBtn = nullptr;
     QPushButton* m_removeFloorBtn = nullptr;
+    QPushButton* m_renameFloorBtn = nullptr;
 
     bool m_projectActive = false;
     QString m_projectName;
