@@ -1,12 +1,13 @@
 #pragma once
 #include <QString>
 #include <QList>
+
+#include "Measurements.h"
 #include <QWidget>
 #include <QPdfWriter>
 #include <QPainter>
 #include <QFile>
 #include <QTextStream>
-#include "CanvasWidget.h"
 
 class ExportManager {
 public:

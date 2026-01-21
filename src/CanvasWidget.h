@@ -9,6 +9,7 @@
 #include <QDateTime>
 #include <vector>
 #include <unordered_map>
+#include "MeasurementsTool.h"
 #include "Settings.h"
 
 class QWheelEvent;
@@ -21,14 +22,10 @@ class ReportDialog;
 enum class ToolMode {
     None,
     DefineScale,
-    MeasureLinear,
-    MeasurePolyline,
-    MeasureAdvanced,
     Select,      ///< wybieranie istniejących pomiarów na płótnie
     InsertText,  ///< wstawianie tekstu w dowolnym miejscu na płótnie
     Delete       ///< usuwanie pomiarów poprzez kliknięcie
 };
-enum class MeasureType { Linear, Polyline, Advanced };
 
 /**
  * Kierunek kotwicy dla dymka tekstowego.  Określa, w którą stronę
@@ -40,46 +37,10 @@ enum class MeasureType { Linear, Polyline, Advanced };
  */
 enum class CalloutAnchor { Bottom, Top, Left, Right };
 
-struct Measure {
-    int id = 0;
-    MeasureType type = MeasureType::Polyline;
-    QString name;
-    QColor color = QColor(0,155,0);
-    QString unit = "cm";
-    // Global buffer (nieużywany, pozostawiony dla zgodności). Ta
-    // wartość jest dodawana do każdej długości, ale nie jest wyświetlana w
-    // kolumnach "Zapas początkowy" ani "Zapas końcowy" w raporcie.
-    double bufferGlobalMeters  = 0.0;
-    // Początkowy zapas ("zapas początkowy") przypisany do konkretnego
-    // pomiaru. W przypadku pomiarów liniowych i polilinii ta wartość jest
-    // domyślnie zerowa. Dla pomiaru zaawansowanego może zostać ustawiona
-    // w dialogu konfiguracji pomiaru.
-    double bufferDefaultMeters = 0.0;
-    // Końcowy zapas ("zapas końcowy"), ustawiany w drugim etapie
-    // pomiaru zaawansowanego. Dla pozostałych pomiarów jest równy zero.
-    double bufferFinalMeters   = 0.0;
-    std::vector<QPointF> pts;
-    QDateTime createdAt;
-    double lengthMeters = 0.0;
-    double totalWithBufferMeters = 0.0;
-    bool visible = true;
-    // Szerokość linii używana do rysowania tego pomiaru (w pikselach).  Domyślnie
-    // przypisana z globalnych ustawień w chwili tworzenia pomiaru. Dzięki temu
-    // poszczególne pomiary mogą mieć różne grubości linii bez modyfikowania
-    // ustawień globalnych.
-    int lineWidthPx = 1;
-
-    // Nazwa warstwy, do której należy ten pomiar.  Warstwy umożliwiają
-    // grupowe włączanie i wyłączanie widoczności elementów w zależności od
-    // kategorii projektu.  Domyślnie wszystkie pomiary należą do warstwy
-    // "Pomiary", ale w przyszłości można ją zmieniać zgodnie z kategorią.
-    QString layer = QStringLiteral("Pomiary");
-};
-
 // Pomocnicza struktura przechowująca tekst wstawiony na płótnie.  Każdy
 // element zawiera pozycję w współrzędnych świata (world) oraz treść
 // tekstu.  Tekst nie jest związany z żadnym pomiarem; jest rysowany
-// niezależnie w drawMeasures().
+// niezależnie w drawTextItems().
 struct TextItem {
     QPointF pos;    ///< współrzędne świata, gdzie umieszczono tekst
     QString text;   ///< treść tekstu
@@ -101,7 +62,7 @@ struct TextItem {
 
     /**
      * Kierunek (kotwica) strzałki dymka.  Pozwala określić, w którą stronę
-     * skierowana jest strzałka w drawMeasures().  Wartość ta jest
+ * skierowana jest strzałka w drawTextItems().  Wartość ta jest
      * ustawiana przy dodawaniu tekstu (kopiowana z m_insertTextAnchor)
      * i może być później zmieniana dla zaznaczonego elementu.  Domyślnie
      * strzałka jest skierowana w dół (u dołu dymka).
@@ -127,7 +88,7 @@ struct TextItem {
 class AdvancedMeasureDialog;
 class FinalBufferDialog;
 
-class CanvasWidget : public QWidget {
+class CanvasWidget : public QWidget, public ToolHost {
     Q_OBJECT
 public:
     enum class ResizeHandle { None, TopLeft, TopRight, BottomLeft, BottomRight };
@@ -187,21 +148,13 @@ private:
     // Mode
     ToolMode m_mode = ToolMode::None;
 
-    // Measurements storage
-    int m_nextId = 1;
-    std::vector<Measure> m_measures;
-    std::vector<QPointF> m_currentPts;  // ongoing measure points
-    Measure m_advTemplate;              // template for advanced
-    // Stos cofniętych punktów dla bieżącego pomiaru (undo/redo)
-    std::vector<QPointF> m_redoPts;
-
-    // --- Pola do obsługi innych narzędzi niż pomiary ---
-    // Indeks wybranego pomiaru w m_measures; -1 jeśli żaden nie jest wybrany.
-    int m_selectedMeasureIndex = -1;
+    // --- Narzędzia ---
+    MeasurementsTool m_measurementsTool;
+    ToolModule* m_activeTool = nullptr;
     // Index of selected text item in m_textItems; -1 means none selected.
     int m_selectedTextIndex = -1;
     // Lista tekstów wstawionych na płótnie.  Każdy wpis przechowuje
-    // pozycję i treść.  Teksty są rysowane w drawMeasures().
+    // pozycję i treść.  Teksty są rysowane w drawTextItems().
     std::vector<TextItem> m_textItems;
 
     // --- Wstawianie nowego dymka tekstowego w trybie InsertText ---
@@ -310,18 +263,6 @@ private:
     // zaznaczonego tekstu. Używany przy przesuwaniu tekstu myszą.
     QPointF m_dragStartOffset;
 
-    // Aktualnie wybrany kolor dla pomiaru będącego w trakcie rysowania.
-    // Wartość ta jest inicjowana na początku pomiaru z ustawień globalnych
-    // (m_settings->defaultMeasureColor) lub z dialogu zaawansowanego, a następnie
-    // może być modyfikowana z paska ustawień. Nie wpływa na kolor
-    // domyślny w m_settings.
-    QColor m_currentColor;
-    // Aktualnie wybrana grubość linii dla pomiaru w trakcie rysowania. Nie
-    // modyfikuje m_settings->lineWidthPx, ale jest kopiowana z tej wartości na
-    // początku pomiaru. Na koniec pomiaru wykorzystywana jest przy zapisie
-    // Measure.lineWidthPx.
-    int m_currentLineWidth = 1;
-
     // Mapa nazw warstw na flagę widoczności.  Pozwala na włączanie i
     // wyłączanie całych kategorii obiektów (np. "Ściany", "Drzwi")
     // poprzez kliknięcie w panelu Projekt.  Wartości true oznaczają,
@@ -349,13 +290,15 @@ public:
      */
     bool isLayerVisible(const QString& layer) const;
     void defineScalePromptAndApply(const QPointF& secondPoint);
-    QPointF toWorld(const QPointF& screen) const;
-    QPointF toScreen(const QPointF& world) const;
-    double polyLengthCm(const std::vector<QPointF>& pts) const;
-    QString fmtLenInProjectUnit(double m) const;
-    void finishCurrentMeasure(QWidget* parentForAdvanced = nullptr);
-    void drawMeasures(QPainter& p);
+    QPointF toWorld(const QPointF& screen) const override;
+    QPointF toScreen(const QPointF& world) const override;
+    double zoom() const override { return m_zoom; }
+    double pixelsPerMeter() const override { return m_pixelsPerMeter; }
+    ProjectSettings* settings() const override { return m_settings; }
+    bool isLayerVisible(const QString& layer) const override;
+    void requestUpdate() override { update(); }
     void drawOverlay(QPainter& p);
+    void drawTextItems(QPainter& p);
 
     // --- Zaznaczanie i manipulacja tekstem ---
 public:
@@ -514,12 +457,11 @@ public:
     void cancelCurrentMeasure();
     /**
      * Cofnięcie ostatnio dodanego punktu w bieżącym pomiarze. Cofnięty punkt jest
-     * zapisywany w m_redoPts, aby umożliwić późniejsze przywrócenie.
+     * zapisywany w buforze modułu pomiarów, aby umożliwić późniejsze przywrócenie.
      */
     void undoCurrentMeasure();
     /**
-     * Przywraca ostatnio cofnięty punkt. Przenosi punkt z m_redoPts z powrotem
-     * do m_currentPts.
+     * Przywraca ostatnio cofnięty punkt w module pomiarów.
      */
     void redoCurrentMeasure();
     /**
@@ -530,13 +472,13 @@ public:
     /**
      * Aktualizuje kolor wszystkich istniejących pomiarów na bieżący kolor
      * ustawiony w ProjectSettings. Funkcja ta nie zmienia koloru pomiarów
-     * aktualnie rysowanych (m_currentPts).
+     * aktualnie rysowanych pomiarów.
      */
     void updateAllMeasureColors();
     /**
      * Zwraca true, jeśli istnieje co najmniej jeden zapisany pomiar.
      */
-    bool hasAnyMeasure() const { return !m_measures.empty(); }
+    bool hasAnyMeasure() const { return m_measurementsTool.hasAnyMeasure(); }
 
     /**
      * Zwraca aktualny kolor ustawiony dla bieżącego pomiaru.  Wartość ta jest
@@ -544,18 +486,18 @@ public:
      * poprzez pasek ustawień. Nie wpływa na kolor domyślny dla kolejnych
      * pomiarów.
      */
-    QColor currentColor() const { return m_currentColor; }
+    QColor currentColor() const { return m_measurementsTool.currentColor(); }
 
     /**
      * Zwraca aktualną grubość linii dla bieżącego pomiaru. Jest ona
      * inicjowana z ustawień globalnych i modyfikowana z paska ustawień,
      * bez wpływu na globalne ustawienia.
      */
-    int currentLineWidth() const { return m_currentLineWidth; }
+    int currentLineWidth() const { return m_measurementsTool.currentLineWidth(); }
 
     /**
      * Ustawia kolor aktualnego pomiaru. Jeśli w trybie zaawansowanym,
-     * aktualizuje także kolor w m_advTemplate, aby zachować spójność.
+     * aktualizuje także kolor w module pomiarów, aby zachować spójność.
      */
     void setCurrentColor(const QColor& c);
 
@@ -568,7 +510,7 @@ public:
     /**
      * Aktualizuje grubość linii wszystkich istniejących pomiarów na wartość
      * globalną zdefiniowaną w ustawieniach projektu.  Funkcja ta nie zmienia
-     * bieżąco rysowanego pomiaru ani m_currentLineWidth.  Po aktualizacji
+     * bieżąco rysowanego pomiaru.  Po aktualizacji
      * konieczne jest odświeżenie widoku (update()).
      */
     void updateAllMeasureLineWidths();
@@ -576,8 +518,8 @@ public:
     /**
      * Rozpoczyna tryb zaznaczania.  Ustawia m_mode na Select i czyści
      * bieżące punkty pomiaru.  Po kliknięciu użytkownik może wybrać
-     * istniejący pomiar.  Zaznaczony pomiar przechowywany jest w
-     * m_selectedMeasureIndex.  Wywołanie tej funkcji nie zmienia
+     * istniejący pomiar.  Zaznaczony pomiar jest utrzymywany przez
+     * aktywny moduł pomiarów.  Wywołanie tej funkcji nie zmienia
      * domyślnych ustawień globalnych.
      */
     void startSelect();
@@ -600,7 +542,7 @@ public:
     void startDelete();
 
     /**
-     * Ustawia kolor wybranego pomiaru (m_selectedMeasureIndex).  Jeśli
+     * Ustawia kolor wybranego pomiaru.  Jeśli
      * żaden pomiar nie jest zaznaczony, funkcja nie robi nic.  Po zmianie
      * kolor jest odzwierciedlany w widoku i eksporcie.
      */
@@ -614,9 +556,8 @@ public:
     void setSelectedMeasureLineWidth(int w);
 
     /**
-     * Usuwa wybrany pomiar z listy (m_selectedMeasureIndex).  Po usunięciu
-     * tryb pozostaje w Delete lub Select, a m_selectedMeasureIndex jest
-     * ustawione na -1.  Jeśli żaden pomiar nie jest zaznaczony, funkcja
+     * Usuwa wybrany pomiar z listy.  Po usunięciu tryb pozostaje
+     * w Delete lub Select.  Jeśli żaden pomiar nie jest zaznaczony, funkcja
      * nie robi nic.
      */
     void deleteSelectedMeasure();
@@ -625,23 +566,13 @@ public:
      * Zwraca kolor zaznaczonego pomiaru.  Jeśli brak zaznaczenia,
      * zwraca domyślny kolor bieżącego pomiaru (m_currentColor).
      */
-    QColor selectedMeasureColor() const {
-        if (m_selectedMeasureIndex >= 0 && m_selectedMeasureIndex < (int)m_measures.size()) {
-            return m_measures[m_selectedMeasureIndex].color;
-        }
-        return m_currentColor;
-    }
+    QColor selectedMeasureColor() const { return m_measurementsTool.selectedMeasureColor(); }
 
     /**
      * Zwraca grubość linii zaznaczonego pomiaru.  Jeśli brak zaznaczenia,
      * zwraca domyślną grubość bieżącego pomiaru.
      */
-    int selectedMeasureLineWidth() const {
-        if (m_selectedMeasureIndex >= 0 && m_selectedMeasureIndex < (int)m_measures.size()) {
-            return m_measures[m_selectedMeasureIndex].lineWidthPx;
-        }
-        return m_currentLineWidth;
-    }
+    int selectedMeasureLineWidth() const { return m_measurementsTool.selectedMeasureLineWidth(); }
 
     /**
      * Wstawia wstawiony tekst (zebrany w m_pendingText) w pozycji
