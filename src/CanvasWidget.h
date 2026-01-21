@@ -96,7 +96,13 @@ public:
 
     // Background
     bool loadBackgroundFile(const QString& file);
+    bool loadBackgroundImage(const QString& file, QImage& image) const;
     void toggleBackgroundVisibility();
+    void setBackgroundVisible(bool visible);
+    bool hasBackground() const;
+    bool isBackgroundVisible() const;
+    void clearBackground();
+    void setBackgroundImage(const QImage& image);
 
     // View & layers
     void startScaleDefinition(double);
@@ -274,7 +280,6 @@ private:
     CalloutAnchor m_insertTextAnchor = CalloutAnchor::Bottom;
 
     // Helpers
-    bool loadPdfFirstPage(const QString& file);
 
 public:
     /**
