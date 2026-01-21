@@ -97,6 +97,10 @@ public:
     // Background
     bool loadBackgroundFile(const QString& file);
     void toggleBackgroundVisibility();
+    void setBackgroundVisible(bool visible);
+    bool hasBackground() const;
+    bool isBackgroundVisible() const;
+    void clearBackground();
 
     // View & layers
     void startScaleDefinition(double);

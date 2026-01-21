@@ -562,10 +562,21 @@ void CanvasWidget::setCurrentLineWidth(int w) {
 bool CanvasWidget::loadBackgroundFile(const QString& file) {
     QFileInfo fi(file);
     const QString ext = fi.suffix().toLower();
-    if (ext == "pdf") return loadPdfFirstPage(file);
+    if (ext == "pdf") {
+        bool ok = loadPdfFirstPage(file);
+        if (ok) {
+            m_showBackground = true;
+        }
+        return ok;
+    }
     QImageReader reader(file); reader.setAutoTransform(true);
     QImage img = reader.read();
-    if (!img.isNull()) { m_bgImage = img; update(); return true; }
+    if (!img.isNull()) {
+        m_bgImage = img;
+        m_showBackground = true;
+        update();
+        return true;
+    }
     return false;
 }
 
@@ -615,6 +626,19 @@ bool CanvasWidget::isLayerVisible(const QString& layer) const {
 }
 
 void CanvasWidget::toggleBackgroundVisibility() { m_showBackground = !m_showBackground; update(); }
+void CanvasWidget::setBackgroundVisible(bool visible) {
+    m_showBackground = visible;
+    update();
+}
+
+bool CanvasWidget::hasBackground() const { return !m_bgImage.isNull(); }
+
+bool CanvasWidget::isBackgroundVisible() const { return m_showBackground; }
+
+void CanvasWidget::clearBackground() {
+    m_bgImage = QImage();
+    update();
+}
 void CanvasWidget::toggleMeasuresVisibility() {
     m_showMeasures = !m_showMeasures;
     m_measurementsTool.setVisible(m_showMeasures);
