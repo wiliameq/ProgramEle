@@ -4,11 +4,12 @@
 #include <vector>
 #include "Settings.h"
 
-class QLineEdit;
 class QDoubleSpinBox;
 class QPushButton;
 class QTableWidget;
 class QLabel;
+class QDialogButtonBox;
+class QLineEdit;
 
 struct Measure;
 struct ProjectSettings;
@@ -79,4 +80,20 @@ private:
     QLabel* m_sumLen = nullptr;
     QLabel* m_sumBuf = nullptr;
     QLabel* m_sumTotal = nullptr;
+};
+
+// --- Nowy projekt ---
+class NewProjectDialog : public QDialog {
+    Q_OBJECT
+public:
+    explicit NewProjectDialog(QWidget* parent = nullptr);
+    QString projectName() const;
+    QString projectAddress() const;
+    QString investorName() const;
+private:
+    void updateOkState();
+    QLineEdit* m_name = nullptr;
+    QLineEdit* m_address = nullptr;
+    QLineEdit* m_investor = nullptr;
+    QDialogButtonBox* m_buttons = nullptr;
 };
