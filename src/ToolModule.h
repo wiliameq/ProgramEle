@@ -7,7 +7,7 @@ class QPainter;
 class QMouseEvent;
 class QKeyEvent;
 class QWidget;
-class ProjectSettings;
+struct ProjectSettings;
 
 class ToolHost {
 public:

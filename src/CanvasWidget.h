@@ -288,7 +288,6 @@ public:
      * Zwraca, czy dana warstwa jest aktualnie widoczna.  Jeśli warstwa nie
      * występuje w mapie, domyślnie uważana jest za widoczną (zwraca true).
      */
-    bool isLayerVisible(const QString& layer) const;
     void defineScalePromptAndApply(const QPointF& secondPoint);
     QPointF toWorld(const QPointF& screen) const override;
     QPointF toScreen(const QPointF& world) const override;
