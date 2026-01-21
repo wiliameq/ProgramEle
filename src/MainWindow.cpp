@@ -19,6 +19,7 @@
 #include <QVBoxLayout>
 #include <QComboBox>
 #include <QToolButton>
+#include <QStackedWidget>
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
@@ -28,8 +29,8 @@
 #include <QRegularExpression>
 #include <QInputDialog>
 MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent) {
-    m_canvas = new CanvasWidget(this, &m_settings);
-    setCentralWidget(m_canvas);
+    m_canvasStack = new QStackedWidget(this);
+    setCentralWidget(m_canvasStack);
     setWindowTitle("ElecCad2D (Qt6) — v5 Measurements");
     resize(1280, 860);
 
@@ -52,15 +53,6 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent) {
     addDockWidget(Qt::BottomDockWidgetArea, m_settingsDock);
 
     buildProjectPanel();
-
-    // Połączenie sygnału z CanvasWidget, które informuje, że rysowanie
-    // pomiaru zostało zakończone (np. po wstawieniu drugiego punktu
-    // odcinka albo po zatwierdzeniu polilinii/zaawansowanego pomiaru).
-    // Gdy to nastąpi, chowamy panel ustawień narzędzia, aby nie pozostał
-    // widoczny po zakończeniu rysowania.
-    connect(m_canvas, &CanvasWidget::measurementFinished, this, [this](){
-        m_settingsDock->setSettingsWidget(nullptr);
-    });
 
     createMenus();
     setProjectActive(false);
@@ -86,36 +78,26 @@ void MainWindow::createMenus() {
     connect(m_toggleMeasuresLayerAction, &QAction::toggled, this, &MainWindow::onToggleMeasuresLayer);
 }
 void MainWindow::onOpenBackground() {
-    auto* floor = currentFloorData();
-    if (!floor) {
+    if (!m_canvas) {
         return;
     }
     QString fn = QFileDialog::getOpenFileName(this, "Wybierz tło", QString(), "Rysunki (*.png *.jpg *.jpeg *.bmp *.pdf)");
     if (fn.isEmpty()) {
         return;
     }
-    QImage image;
-    if (!m_canvas->loadBackgroundImage(fn, image)) {
+    if (!m_canvas->loadBackgroundFile(fn)) {
         QMessageBox::warning(this,
                              QString::fromUtf8("Błąd wczytania tła"),
                              QString::fromUtf8("Nie udało się wczytać wybranego pliku tła."));
         return;
     }
-    floor->backgroundPath = fn;
-    floor->backgroundImage = image;
-    floor->backgroundLoaded = true;
-    floor->backgroundVisible = true;
-    m_canvas->setBackgroundImage(image);
-    m_canvas->setBackgroundVisible(true);
     updateBackgroundControls();
 }
 void MainWindow::onToggleBackground() {
-    auto* floor = currentFloorData();
-    if (!floor || !m_canvas->hasBackground()) {
+    if (!m_canvas || !m_canvas->hasBackground()) {
         return;
     }
     m_canvas->toggleBackgroundVisibility();
-    floor->backgroundVisible = m_canvas->isBackgroundVisible();
     updateBackgroundControls();
 }
 void MainWindow::onSetScale() {
@@ -155,8 +137,9 @@ void MainWindow::onNewProject() {
     m_buildings.clear();
     Building first;
     first.name = nextBuildingName();
-    first.floors.append(FloorData{nextFloorName(first)});
+    first.floors.append(FloorData{nextFloorName(first), nullptr});
     m_buildings.push_back(first);
+    ensureFloorCanvas(m_buildings[0].floors[0]);
 
     m_projectName = dialog.projectName();
     m_projectAddress = dialog.projectAddress();
@@ -171,9 +154,10 @@ void MainWindow::onNewProject() {
 void MainWindow::onAddBuilding() {
     Building building;
     building.name = nextBuildingName();
-    building.floors.append(FloorData{nextFloorName(building)});
+    building.floors.append(FloorData{nextFloorName(building), nullptr});
     m_buildings.push_back(building);
     int buildingIndex = m_buildings.size() - 1;
+    ensureFloorCanvas(m_buildings[buildingIndex].floors[0]);
     refreshProjectPanel(buildingIndex, 0);
     writeProjectTempFile();
 }
@@ -185,6 +169,9 @@ void MainWindow::onRemoveBuilding() {
     }
     if (m_buildings.size() <= 1) {
         return;
+    }
+    for (auto& floor : m_buildings[index].floors) {
+        removeFloorCanvas(floor);
     }
     m_buildings.removeAt(index);
     int lastIndex = static_cast<int>(m_buildings.size()) - 1;
@@ -224,8 +211,9 @@ void MainWindow::onAddFloor() {
         return;
     }
     auto& building = m_buildings[index];
-    building.floors.append(FloorData{nextFloorName(building)});
+    building.floors.append(FloorData{nextFloorName(building), nullptr});
     int floorIndex = building.floors.size() - 1;
+    ensureFloorCanvas(building.floors[floorIndex]);
     refreshProjectPanel(index, floorIndex);
     writeProjectTempFile();
 }
@@ -243,6 +231,7 @@ void MainWindow::onRemoveFloor() {
     if (building.floors.size() <= 1) {
         return;
     }
+    removeFloorCanvas(building.floors[floorIndex]);
     building.floors.removeAt(floorIndex);
     int lastFloorIndex = static_cast<int>(building.floors.size()) - 1;
     int nextFloorIndex = floorIndex < lastFloorIndex ? floorIndex : lastFloorIndex;
@@ -295,12 +284,12 @@ void MainWindow::onBuildingChanged(int index) {
     if (m_renameFloorBtn) {
         m_renameFloorBtn->setEnabled(!m_buildings[index].floors.isEmpty());
     }
-    applyBackgroundForSelection();
+    applyCanvasForSelection();
 }
 
 void MainWindow::onFloorChanged(int index) {
     Q_UNUSED(index);
-    applyBackgroundForSelection();
+    applyCanvasForSelection();
 }
 
 void MainWindow::setProjectActive(bool active) {
@@ -332,6 +321,9 @@ void MainWindow::setProjectActive(bool active) {
     }
     if (m_canvas) {
         m_canvas->setEnabled(enabled);
+    }
+    if (m_canvasStack) {
+        m_canvasStack->setEnabled(enabled);
     }
     if (m_projectControls) {
         m_projectControls->setVisible(enabled);
@@ -498,7 +490,7 @@ void MainWindow::refreshProjectPanel(int preferredBuildingIndex, int preferredFl
     if (m_renameBuildingBtn) {
         m_renameBuildingBtn->setEnabled(!m_buildings.isEmpty());
     }
-    applyBackgroundForSelection();
+    applyCanvasForSelection();
 }
 
 QString MainWindow::createProjectTempFile(const QString& projectName,
@@ -581,38 +573,18 @@ const MainWindow::FloorData* MainWindow::currentFloorData() const {
     return &m_buildings[buildingIndex].floors[floorIndex];
 }
 
-void MainWindow::applyBackgroundForSelection() {
-    const auto* floor = currentFloorData();
+void MainWindow::applyCanvasForSelection() {
+    auto* floor = currentFloorData();
     if (!floor) {
-        if (m_canvas) {
-            m_canvas->clearBackground();
-        }
+        m_canvas = nullptr;
         updateBackgroundControls();
         return;
     }
-    if (floor->backgroundPath.isEmpty()) {
-        m_canvas->clearBackground();
-    } else {
-        auto* editableFloor = currentFloorData();
-        if (editableFloor) {
-            if (!editableFloor->backgroundLoaded) {
-                QImage image;
-                if (!m_canvas->loadBackgroundImage(editableFloor->backgroundPath, image)) {
-                    editableFloor->backgroundPath.clear();
-                    editableFloor->backgroundLoaded = false;
-                    editableFloor->backgroundImage = QImage();
-                    m_canvas->clearBackground();
-                } else {
-                    editableFloor->backgroundImage = image;
-                    editableFloor->backgroundLoaded = true;
-                    m_canvas->setBackgroundImage(image);
-                }
-            } else {
-                m_canvas->setBackgroundImage(editableFloor->backgroundImage);
-            }
-        }
+    ensureFloorCanvas(*floor);
+    if (m_canvasStack && floor->canvas) {
+        m_canvasStack->setCurrentWidget(floor->canvas);
     }
-    m_canvas->setBackgroundVisible(floor->backgroundVisible);
+    m_canvas = floor->canvas;
     updateBackgroundControls();
 }
 
@@ -624,6 +596,29 @@ void MainWindow::updateBackgroundControls() {
     if (m_scaleBackgroundBtn) {
         m_scaleBackgroundBtn->setEnabled(hasBackground);
     }
+}
+
+void MainWindow::ensureFloorCanvas(FloorData& floor) {
+    if (floor.canvas || !m_canvasStack) {
+        return;
+    }
+    floor.canvas = new CanvasWidget(m_canvasStack, &m_settings);
+    m_canvasStack->addWidget(floor.canvas);
+    connect(floor.canvas, &CanvasWidget::measurementFinished, this, [this]() {
+        m_settingsDock->setSettingsWidget(nullptr);
+    });
+}
+
+void MainWindow::removeFloorCanvas(FloorData& floor) {
+    if (!floor.canvas || !m_canvasStack) {
+        return;
+    }
+    if (floor.canvas == m_canvas) {
+        m_canvas = nullptr;
+    }
+    m_canvasStack->removeWidget(floor.canvas);
+    floor.canvas->deleteLater();
+    floor.canvas = nullptr;
 }
 
 // --- Pomocnicza metoda ---

@@ -1,7 +1,6 @@
 #pragma once
 #include <QMainWindow>
 #include <QVector>
-#include <QImage>
 #include "Settings.h"
 class CanvasWidget;
 class QDockWidget;
@@ -10,6 +9,7 @@ class QLabel;
 class QComboBox;
 class QPushButton;
 class QToolButton;
+class QStackedWidget;
 class MainWindow : public QMainWindow {
     Q_OBJECT
 public:
@@ -36,10 +36,7 @@ private slots:
 private:
     struct FloorData {
         QString name;
-        QString backgroundPath;
-        QImage backgroundImage;
-        bool backgroundLoaded = false;
-        bool backgroundVisible = true;
+        CanvasWidget* canvas = nullptr;
     };
     struct Building {
         QString name;
@@ -60,8 +57,10 @@ private:
     QString nextFloorName(const Building& building) const;
     FloorData* currentFloorData();
     const FloorData* currentFloorData() const;
-    void applyBackgroundForSelection();
+    void applyCanvasForSelection();
     void updateBackgroundControls();
+    void ensureFloorCanvas(FloorData& floor);
+    void removeFloorCanvas(FloorData& floor);
 
     /**
      * Wyświetla w dolnym panelu (ToolSettingsWidget) kontrolki związane z rysowaniem pomiarów.
@@ -77,6 +76,7 @@ private:
     class QDockWidget* m_rightDock = nullptr;
     // Panel dolny z ustawieniami aktualnego narzędzia
     class ToolSettingsWidget* m_settingsDock = nullptr;
+    QStackedWidget* m_canvasStack = nullptr;
 
     QAction* m_newProjectAction = nullptr;
     QAction* m_reportAction = nullptr;
