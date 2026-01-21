@@ -11,7 +11,7 @@ class QTableWidget;
 class QLabel;
 
 struct Measure;
-class ProjectSettings;
+struct ProjectSettings;
 
 // --- Pomiar zaawansowany (definiowanie szablonu) ---
 class AdvancedMeasureDialog : public QDialog {
