@@ -5,7 +5,6 @@
 #include "Settings.h"
 
 class QLineEdit;
-class QComboBox;
 class QDoubleSpinBox;
 class QPushButton;
 class QTableWidget;
@@ -13,13 +12,6 @@ class QLabel;
 
 struct Measure;
 class ProjectSettings;
-
-// --- Ustawienia projektu ---
-class ProjectSettingsDialog : public QDialog {
-    Q_OBJECT
-public:
-    explicit ProjectSettingsDialog(QWidget* parent, ProjectSettings* settings);
-};
 
 // --- Pomiar zaawansowany (definiowanie szablonu) ---
 class AdvancedMeasureDialog : public QDialog {
@@ -50,11 +42,12 @@ class FinalBufferDialog : public QDialog {
 public:
     /**
      * Dialog do ustawiania zapasu końcowego po zakończeniu rysowania.
-     * Jednostka zapasu pochodzi z ustawień projektu, więc nie ma wyboru jednostki.
+     * Jednostką projektu są centymetry, więc nie ma wyboru jednostki.
      */
-    explicit FinalBufferDialog(QWidget* parent, ProjectSettings::Unit unit);
+    explicit FinalBufferDialog(QWidget* parent, ProjectSettings* settings);
     double bufferValue() const;
 private:
+    ProjectSettings* m_settings = nullptr;
     QDoubleSpinBox* m_buffer = nullptr;
 };
 
@@ -86,10 +79,4 @@ private:
     QLabel* m_sumLen = nullptr;
     QLabel* m_sumBuf = nullptr;
     QLabel* m_sumTotal = nullptr;
-    // Dodatkowa etykieta do wyświetlania informacji o domyślnym zapasie
-    // pomiarowym.  Jeżeli domyślny zapas (ProjectSettings::defaultBuffer)
-    // jest większy od zera, ta etykieta jest widoczna i informuje użytkownika,
-    // że każdy nowy pomiar rozpoczyna się od tej wartości.  W przeciwnym
-    // razie jest ona ukrywana.
-    QLabel* m_defaultBufferNote = nullptr;
 };

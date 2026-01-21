@@ -7,7 +7,6 @@
 #include <QHBoxLayout>
 #include <QFormLayout>
 #include <QDialogButtonBox>
-#include <QComboBox>
 #include <QSpinBox>
 #include <QDoubleSpinBox>
 #include <QLineEdit>
@@ -41,61 +40,6 @@
 #include <QTextDocument>
 #include <QRegularExpression>
 
-// -------- ProjectSettingsDialog --------
-ProjectSettingsDialog::ProjectSettingsDialog(QWidget* parent, ProjectSettings* s) : QDialog(parent) {
-    setWindowTitle(QString::fromUtf8("Ustawienia pomiarów"));
-    auto lay = new QVBoxLayout(this);
-    auto form = new QFormLayout();
-    auto unit = new QComboBox();
-    unit->addItems({QStringLiteral("cm"),QStringLiteral("m")});
-    int currentIdx = (s->defaultUnit == ProjectSettings::Unit::Cm ? 0 : 1);
-    unit->setCurrentIndex(currentIdx);
-    auto decimals = new QSpinBox(); decimals->setRange(0,3); decimals->setValue(s->decimals);
-    // Domyślny zapas interpretowany w wybranej jednostce (cm lub m).
-    // Ustaw liczbę miejsc po przecinku w zależności od aktualnie wybranej jednostki.
-    auto buffer = new QDoubleSpinBox();
-    buffer->setRange(0,100000);
-    // Wartość początkowa pochodzi z ustawień. Nie zakładamy cm, ponieważ defaultBuffer
-    // jest interpretowany w aktualnej jednostce.
-    buffer->setValue(s->defaultBuffer);
-    // Docelową liczbę miejsc po przecinku ustawiamy na podstawie bieżącej jednostki.
-    auto updateDecimals = [&, buffer](int unitIndex){
-        // 0 = cm → 1 miejsce po przecinku (dokładność 0.1 cm)
-        // 1 = m  → 3 miejsca po przecinku (dokładność 0.001 m)
-        buffer->setDecimals(unitIndex == 0 ? 1 : 3);
-    };
-    auto colorBtn = new QPushButton(QString::fromUtf8("Wybierz kolor…"));
-    auto lw = new QSpinBox(); lw->setRange(1,8); lw->setValue(s->lineWidthPx);
-    form->addRow(QString::fromUtf8("Jednostka domyślna:"), unit);
-    form->addRow(QString::fromUtf8("Zaokrąglenie:"), decimals);
-    form->addRow(QString::fromUtf8("Domyślny zapas:"), buffer);
-    // Zaktualizuj liczbę miejsc po przecinku w zależności od jednostki (wartość początkowa)
-    updateDecimals(currentIdx);
-    // Reaguj na zmianę jednostki, modyfikując liczbę miejsc po przecinku spinboxu zapasu
-    QObject::connect(unit, QOverload<int>::of(&QComboBox::currentIndexChanged), this,
-                     [=](int idx){ updateDecimals(idx); });
-    form->addRow(QString::fromUtf8("Kolor pomiarów:"), colorBtn);
-    form->addRow(QString::fromUtf8("Grubość linii [px]:"), lw);
-    lay->addLayout(form);
-    auto buttons = new QDialogButtonBox(QDialogButtonBox::Ok|QDialogButtonBox::Cancel);
-    lay->addWidget(buttons);
-    QColor chosen = s->defaultMeasureColor;
-    QObject::connect(colorBtn, &QPushButton::clicked, this, [&, s](){
-        QColor c = QColorDialog::getColor(s->defaultMeasureColor, this, QString::fromUtf8("Kolor pomiarów"));
-        if (c.isValid()) chosen = c;
-    });
-    QObject::connect(buttons, &QDialogButtonBox::accepted, this, [=](){
-        // Zapisz wszystkie ustawienia pomiarów globalnie
-        s->defaultUnit = unit->currentIndex()==0 ? ProjectSettings::Unit::Cm : ProjectSettings::Unit::M;
-        s->decimals = decimals->value();
-        s->defaultBuffer = buffer->value();
-        s->defaultMeasureColor = chosen;
-        s->lineWidthPx = lw->value();
-        accept();
-    });
-    QObject::connect(buttons, &QDialogButtonBox::rejected, this, &QDialog::reject);
-}
-
 // -------- AdvancedMeasureDialog --------
 AdvancedMeasureDialog::AdvancedMeasureDialog(QWidget* parent, ProjectSettings* settings)
     : QDialog(parent), m_settings(settings) {
@@ -105,18 +49,16 @@ AdvancedMeasureDialog::AdvancedMeasureDialog(QWidget* parent, ProjectSettings* s
     // Pole nazwy pomiaru
     m_name = new QLineEdit();
     m_name->setPlaceholderText(QString::fromUtf8("Nazwa pomiaru"));
-    // Spinbox zapasu. Dokładność zależy od globalnej jednostki (cm → 1, m → 3)
+    // Spinbox zapasu. Dokładność zależy od globalnej liczby miejsc po przecinku.
     m_buffer = new QDoubleSpinBox();
     m_buffer->setRange(0,100000);
     // Ustaw liczbę miejsc po przecinku i wartość startową zgodnie z ustawieniami projektu
-    int decPlaces = (settings->defaultUnit == ProjectSettings::Unit::Cm) ? 1 : 3;
-    m_buffer->setDecimals(decPlaces);
-    // defaultBuffer przechowuje wartość w tej samej jednostce, co wybrane ustawienie projektu
-    m_buffer->setValue(settings->defaultBuffer);
+    m_buffer->setDecimals(settings->decimals);
+    m_buffer->setValue(0.0);
     // Wybór koloru linii
     m_colorBtn = new QPushButton(QString::fromUtf8("Wybierz kolor…"));
     m_chosen = settings->defaultMeasureColor;
-    // Składamy formularz: brak wyboru jednostki – jest ona ustawiona globalnie
+    // Składamy formularz: brak wyboru jednostki – jednostką są centymetry
     form->addRow(QString::fromUtf8("Nazwa:"), m_name);
     // W dialogu pomiaru zaawansowanego ta wartość reprezentuje zapas początkowy
     // przypisany do konkretnego pomiaru. Globalny zapas jest ustawiany w opcjach
@@ -139,14 +81,15 @@ double AdvancedMeasureDialog::bufferValue() const { return m_buffer ? m_buffer->
 QColor AdvancedMeasureDialog::color() const { return m_chosen; }
 
 // -------- FinalBufferDialog --------
-FinalBufferDialog::FinalBufferDialog(QWidget* parent, ProjectSettings::Unit u) : QDialog(parent) {
+FinalBufferDialog::FinalBufferDialog(QWidget* parent, ProjectSettings* settings)
+    : QDialog(parent), m_settings(settings) {
     setWindowTitle(QString::fromUtf8("Zapas końcowy"));
     auto lay = new QVBoxLayout(this);
     auto form = new QFormLayout();
     m_buffer = new QDoubleSpinBox();
     m_buffer->setRange(0,100000);
-    // Liczbę miejsc po przecinku dobieramy do jednostki projektu: cm → 1, m → 3
-    m_buffer->setDecimals(u == ProjectSettings::Unit::Cm ? 1 : 3);
+    // Liczbę miejsc po przecinku dobieramy do ustawień projektu.
+    m_buffer->setDecimals(settings ? settings->decimals : 1);
     form->addRow(QString::fromUtf8("Zapas:"), m_buffer);
     lay->addLayout(form);
     auto buttons = new QDialogButtonBox(QDialogButtonBox::Ok|QDialogButtonBox::Cancel);
@@ -167,18 +110,12 @@ EditMeasureDialog::EditMeasureDialog(QWidget* parent, ProjectSettings* settings,
     // Spinboxy zapasu: używamy aktualnej jednostki projektu do skalowania
     m_bufDefault = new QDoubleSpinBox(); m_bufDefault->setRange(0,100000);
     m_bufFinal  = new QDoubleSpinBox(); m_bufFinal->setRange(0,100000);
-    // Liczba miejsc po przecinku zależy od globalnej jednostki
-    int decPlaces = (settings->defaultUnit == ProjectSettings::Unit::Cm) ? 1 : 3;
-    m_bufDefault->setDecimals(decPlaces);
-    m_bufFinal->setDecimals(decPlaces);
-    // Ustaw wartość według jednostki pomiaru (przechowujemy w metrach)
-    if (settings->defaultUnit == ProjectSettings::Unit::Cm) {
-        m_bufDefault->setValue(measure->bufferDefaultMeters * 100.0);
-        m_bufFinal->setValue(measure->bufferFinalMeters * 100.0);
-    } else {
-        m_bufDefault->setValue(measure->bufferDefaultMeters);
-        m_bufFinal->setValue(measure->bufferFinalMeters);
-    }
+    // Liczba miejsc po przecinku zależy od ustawień projektu
+    m_bufDefault->setDecimals(settings->decimals);
+    m_bufFinal->setDecimals(settings->decimals);
+    // Ustaw wartości w centymetrach
+    m_bufDefault->setValue(measure->bufferDefaultMeters);
+    m_bufFinal->setValue(measure->bufferFinalMeters);
     // Wybór koloru
     m_colorBtn = new QPushButton(QString::fromUtf8("Wybierz kolor…"));
     m_chosen = measure->color;
@@ -198,16 +135,9 @@ EditMeasureDialog::EditMeasureDialog(QWidget* parent, ProjectSettings* settings,
     QObject::connect(buttons, &QDialogButtonBox::accepted, this, [this, settings](){
         // Zapisz zmiany do obiektu Measure
         m->name = m_name->text();
-        // Jednostka jest globalna – nie zmieniamy pola m->unit
-        // Konwersja zapasów z aktualnej jednostki do metrów:
-        // m_bufDefault reprezentuje zapas początkowy, m_bufFinal – zapas końcowy.
-        if (settings->defaultUnit == ProjectSettings::Unit::Cm) {
-            m->bufferDefaultMeters = m_bufDefault->value() / 100.0;
-            m->bufferFinalMeters   = m_bufFinal->value() / 100.0;
-        } else {
-            m->bufferDefaultMeters = m_bufDefault->value();
-            m->bufferFinalMeters   = m_bufFinal->value();
-        }
+        // Jednostka jest stała (cm) – zapisujemy wartości bez konwersji.
+        m->bufferDefaultMeters = m_bufDefault->value();
+        m->bufferFinalMeters   = m_bufFinal->value();
         m->color = m_chosen;
         // Po zmianie zapasów oblicz ponownie długość z zapasami.  Całkowita
         // długość obejmuje długość, globalny zapas, zapas początkowy i zapas
@@ -237,9 +167,8 @@ ReportDialog::ReportDialog(QWidget* parent, ProjectSettings* settings, std::vect
     setWindowTitle(QString::fromUtf8("Raport pomiarów"));
     auto lay = new QVBoxLayout(this);
     m_table = new QTableWidget(this);
-    // Zbuduj listę nagłówków, dodając jednostki zgodnie z ustawieniami projektu
-    const QString unitLabel = (m_settings->defaultUnit == ProjectSettings::Unit::Cm)
-                              ? QStringLiteral("cm") : QStringLiteral("m");
+    // Zbuduj listę nagłówków z jednostką cm
+    const QString unitLabel = QStringLiteral("cm");
     QStringList headers = {
         QStringLiteral("Check"),
         QStringLiteral("ID"),
@@ -284,36 +213,26 @@ ReportDialog::ReportDialog(QWidget* parent, ProjectSettings* settings, std::vect
         set(COL_ID, QString::number(m.id));
         set(COL_NAME, m.name);
         set(COL_TYPE, typeStr(m));
-        // Formatowanie długości i sumy w wybranej jednostce
+        // Formatowanie długości i sumy w cm
         QString lenStr;
         QString sumStr;
         double lenVal = m.lengthMeters;
         double sumVal = m.totalWithBufferMeters;
-        if (m_settings->defaultUnit == ProjectSettings::Unit::Cm) {
-            lenStr = QString("%1 cm").arg(lenVal*100.0, 0, 'f', m_settings->decimals);
-            sumStr = QString("%1 cm").arg(sumVal*100.0, 0, 'f', m_settings->decimals);
-        } else {
-            lenStr = QString("%1 m").arg(lenVal, 0, 'f', m_settings->decimals);
-            sumStr = QString("%1 m").arg(sumVal, 0, 'f', m_settings->decimals);
-        }
+        lenStr = QString("%1 cm").arg(lenVal, 0, 'f', m_settings->decimals);
+        sumStr = QString("%1 cm").arg(sumVal, 0, 'f', m_settings->decimals);
         QTableWidgetItem* itLen = new QTableWidgetItem(lenStr);
         itLen->setData(Qt::UserRole + 1, lenVal);
         m_table->setItem(r, COL_LEN_M, itLen);
         QTableWidgetItem* itSum = new QTableWidgetItem(sumStr);
         itSum->setData(Qt::UserRole + 1, sumVal);
         m_table->setItem(r, COL_SUM_M, itSum);
-        // Zapas początkowy i końcowy również w wybranej jednostce
+        // Zapas początkowy i końcowy również w cm
         double bufStartVal = m.bufferDefaultMeters;
         double bufEndVal   = m.bufferFinalMeters;
         QString bufStartStr;
         QString bufEndStr;
-        if (m_settings->defaultUnit == ProjectSettings::Unit::Cm) {
-            bufStartStr = QString("%1 cm").arg(bufStartVal*100.0, 0, 'f', m_settings->decimals);
-            bufEndStr   = QString("%1 cm").arg(bufEndVal*100.0,   0, 'f', m_settings->decimals);
-        } else {
-            bufStartStr = QString("%1 m").arg(bufStartVal, 0, 'f', m_settings->decimals);
-            bufEndStr   = QString("%1 m").arg(bufEndVal,   0, 'f', m_settings->decimals);
-        }
+        bufStartStr = QString("%1 cm").arg(bufStartVal, 0, 'f', m_settings->decimals);
+        bufEndStr   = QString("%1 cm").arg(bufEndVal,   0, 'f', m_settings->decimals);
         QTableWidgetItem* itBufStart = new QTableWidgetItem(bufStartStr);
         itBufStart->setData(Qt::UserRole + 1, bufStartVal);
         m_table->setItem(r, COL_BUF_START, itBufStart);
@@ -344,19 +263,14 @@ ReportDialog::ReportDialog(QWidget* parent, ProjectSettings* settings, std::vect
                 // Przelicz całkowitą długość z zapasami.  Obejmuje
                 // długość, globalny zapas, zapas początkowy i końcowy.
                 ref.totalWithBufferMeters = ref.lengthMeters + ref.bufferGlobalMeters + ref.bufferDefaultMeters + ref.bufferFinalMeters;
-                // Aktualizuj widoczne komórki zgodnie z wybraną jednostką
+                // Aktualizuj widoczne komórki w cm
                 m_table->item(row,COL_NAME)->setText(ref.name);
                 double lenVal = ref.lengthMeters;
                 double sumVal = ref.totalWithBufferMeters;
                 QString lenStr;
                 QString sumStr;
-                if (m_settings->defaultUnit == ProjectSettings::Unit::Cm) {
-                    lenStr = QString("%1 cm").arg(lenVal*100.0, 0, 'f', m_settings->decimals);
-                    sumStr = QString("%1 cm").arg(sumVal*100.0, 0, 'f', m_settings->decimals);
-                } else {
-                    lenStr = QString("%1 m").arg(lenVal, 0, 'f', m_settings->decimals);
-                    sumStr = QString("%1 m").arg(sumVal, 0, 'f', m_settings->decimals);
-                }
+                lenStr = QString("%1 cm").arg(lenVal, 0, 'f', m_settings->decimals);
+                sumStr = QString("%1 cm").arg(sumVal, 0, 'f', m_settings->decimals);
                 QTableWidgetItem* itLen = m_table->item(row, COL_LEN_M);
                 itLen->setText(lenStr);
                 itLen->setData(Qt::UserRole + 1, lenVal);
@@ -368,13 +282,8 @@ ReportDialog::ReportDialog(QWidget* parent, ProjectSettings* settings, std::vect
                 double bufEndVal   = ref.bufferFinalMeters;
                 QString bufStartStr;
                 QString bufEndStr;
-                if (m_settings->defaultUnit == ProjectSettings::Unit::Cm) {
-                    bufStartStr = QString("%1 cm").arg(bufStartVal*100.0, 0, 'f', m_settings->decimals);
-                    bufEndStr   = QString("%1 cm").arg(bufEndVal*100.0,   0, 'f', m_settings->decimals);
-                } else {
-                    bufStartStr = QString("%1 m").arg(bufStartVal, 0, 'f', m_settings->decimals);
-                    bufEndStr   = QString("%1 m").arg(bufEndVal,   0, 'f', m_settings->decimals);
-                }
+                bufStartStr = QString("%1 cm").arg(bufStartVal, 0, 'f', m_settings->decimals);
+                bufEndStr   = QString("%1 cm").arg(bufEndVal,   0, 'f', m_settings->decimals);
                 QTableWidgetItem* itBufStart = m_table->item(row, COL_BUF_START);
                 itBufStart->setText(bufStartStr);
                 itBufStart->setData(Qt::UserRole + 1, bufStartVal);
@@ -451,11 +360,6 @@ ReportDialog::ReportDialog(QWidget* parent, ProjectSettings* settings, std::vect
     foot->addSpacing(20);
     foot->addWidget(m_sumTotal);
     foot->addStretch();
-    // Etykieta informacyjna dotycząca domyślnego zapasu pomiarowego.
-    m_defaultBufferNote = new QLabel;
-    m_defaultBufferNote->setWordWrap(true);
-    // Dodajemy etykietę do tego samego układu, aby znajdowała się po prawej stronie sum.
-    foot->addWidget(m_defaultBufferNote);
     lay->addLayout(foot);
 
     QObject::connect(m_table, &QTableWidget::itemChanged, this, [=](QTableWidgetItem* it){
@@ -493,16 +397,12 @@ ReportDialog::ReportDialog(QWidget* parent, ProjectSettings* settings, std::vect
             }
         } else if (col == BUF_START_COL || col == BUF_END_COL) {
             // Edycja zapasu początkowego lub końcowego
-            double currentMeters = (col == BUF_START_COL) ? ref.bufferDefaultMeters : ref.bufferFinalMeters;
-            double currentVal;
-            if (m_settings->defaultUnit == ProjectSettings::Unit::Cm) currentVal = currentMeters * 100.0;
-            else currentVal = currentMeters;
+            double currentVal = (col == BUF_START_COL) ? ref.bufferDefaultMeters : ref.bufferFinalMeters;
             bool ok = false;
             QString prompt = (col == BUF_START_COL)
                            ? QString::fromUtf8("Zapas początkowy (%1):")
                            : QString::fromUtf8("Zapas końcowy (%1):");
-            QString unitLabel = (m_settings->defaultUnit == ProjectSettings::Unit::Cm)
-                              ? QStringLiteral("cm") : QStringLiteral("m");
+            QString unitLabel = QStringLiteral("cm");
             double newVal = QInputDialog::getDouble(const_cast<ReportDialog*>(this),
                                                     (col == BUF_START_COL)
                                                       ? QString::fromUtf8("Edytuj zapas początkowy")
@@ -514,37 +414,24 @@ ReportDialog::ReportDialog(QWidget* parent, ProjectSettings* settings, std::vect
                                                     m_settings->decimals,
                                                     &ok);
             if (ok) {
-                double newMeters;
-                if (m_settings->defaultUnit == ProjectSettings::Unit::Cm) newMeters = newVal / 100.0;
-                else newMeters = newVal;
                 if (col == BUF_START_COL) {
-                    ref.bufferDefaultMeters = newMeters;
+                    ref.bufferDefaultMeters = newVal;
                 } else {
-                    ref.bufferFinalMeters = newMeters;
+                    ref.bufferFinalMeters = newVal;
                 }
                 // Zaktualizuj tekst i dane ukryte komórki
-                QString text;
-                if (m_settings->defaultUnit == ProjectSettings::Unit::Cm) {
-                    text = QString("%1 cm").arg(newVal, 0, 'f', m_settings->decimals);
-                } else {
-                    text = QString("%1 m").arg(newVal, 0, 'f', m_settings->decimals);
-                }
+                QString text = QString("%1 cm").arg(newVal, 0, 'f', m_settings->decimals);
                 QTableWidgetItem* itemBuf = m_table->item(row, col);
                 if (!itemBuf) {
                     itemBuf = new QTableWidgetItem;
                     m_table->setItem(row, col, itemBuf);
                 }
                 itemBuf->setText(text);
-                itemBuf->setData(Qt::UserRole + 1, newMeters);
+                itemBuf->setData(Qt::UserRole + 1, newVal);
                 // Przelicz całkowitą długość z zapasami i zaktualizuj kolumnę sumy
                 ref.totalWithBufferMeters = ref.lengthMeters + ref.bufferGlobalMeters + ref.bufferDefaultMeters + ref.bufferFinalMeters;
                 double sumMeters = ref.totalWithBufferMeters;
-                QString sumStr;
-                if (m_settings->defaultUnit == ProjectSettings::Unit::Cm) {
-                    sumStr = QString("%1 cm").arg(sumMeters * 100.0, 0, 'f', m_settings->decimals);
-                } else {
-                    sumStr = QString("%1 m").arg(sumMeters, 0, 'f', m_settings->decimals);
-                }
+                QString sumStr = QString("%1 cm").arg(sumMeters, 0, 'f', m_settings->decimals);
                 QTableWidgetItem* itSum = m_table->item(row, SUM_COL);
                 if (!itSum) {
                     itSum = new QTableWidgetItem;
@@ -668,21 +555,6 @@ QObject::connect(btnCsv, &QPushButton::clicked, this, [this](){
             }
         }
         writeRow(row);
-    }
-    // Dodaj informację o domyślnym zapasie pomiarowym jako ostatni wiersz,
-    // jeśli domyślny zapas jest większy od zera.  Wstawiamy notatkę w pierwszej
-    // widocznej kolumnie, a pozostałe zostawiamy puste.
-    if (m_settings->defaultBuffer > 0.0) {
-        QString unitLabel = (m_settings->defaultUnit == ProjectSettings::Unit::Cm)
-                           ? QStringLiteral("cm") : QStringLiteral("m");
-        QString valStr = QString::number(m_settings->defaultBuffer, 'f', m_settings->decimals);
-        QString note  = QString::fromUtf8("Domyślny zapas pomiarowy: %1 %2").arg(valStr).arg(unitLabel);
-        // Utwórz wiersz o takiej samej liczbie kolumn jak nagłówek widocznych kolumn
-        QStringList noteRow;
-        noteRow.reserve(visibleCols.size());
-        noteRow << note;
-        for (int i=1; i<visibleCols.size(); ++i) noteRow << QString();
-        writeRow(noteRow);
     }
     out.flush();
 });
@@ -831,22 +703,6 @@ QTextDocument doc;
         cur.insertText(sums);
     }
 
-    // Po wstawieniu sum, wstaw również informację o domyślnym zapasie pomiarowym, jeśli istnieje.
-    if (m_settings->defaultBuffer > 0.0) {
-        // Dodaj odstęp
-        cur.insertBlock();
-        QTextBlockFormat gapBuf; gapBuf.setTopMargin(10); cur.setBlockFormat(gapBuf);
-        cur.insertBlock();
-        QTextCharFormat bcf; QFont bf; bf.setPointSizeF(bf.pointSizeF()); bcf.setFont(bf);
-        cur.setCharFormat(bcf);
-        QString unitLabel = (m_settings->defaultUnit == ProjectSettings::Unit::Cm)
-                           ? QStringLiteral("cm") : QStringLiteral("m");
-        QString valStr = QString::number(m_settings->defaultBuffer, 'f', m_settings->decimals);
-        QString note = QString::fromUtf8("Domyślny zapas pomiarowy: %1 %2").arg(valStr).arg(unitLabel);
-        cur.insertText(note);
-    }
-
-    
     // Automatic multi-page print
     doc.setPageSize(layout.paintRectPoints().size());
     doc.print(&writer);
@@ -886,8 +742,7 @@ QTextDocument doc;
         // Buduj nagłówek na podstawie widocznych kolumn
         QStringList header;
         header.reserve(visibleCols.size());
-        const QString unitLabel = (m_settings->defaultUnit == ProjectSettings::Unit::Cm)
-                                  ? QStringLiteral("cm") : QStringLiteral("m");
+        const QString unitLabel = QStringLiteral("cm");
         for (int idx = 0; idx < visibleCols.size(); ++idx) {
             int c = visibleCols[idx];
             if (c == 0) {
@@ -938,14 +793,6 @@ QTextDocument doc;
         out << m_sumLen->text()  << "\r\n";
         out << m_sumBuf->text()  << "\r\n";
         out << m_sumTotal->text() << "\r\n";
-        // Wpisz również informację o domyślnym zapasie pomiarowym, jeśli dotyczy
-        if (m_settings->defaultBuffer > 0.0) {
-            QString unitLabel = (m_settings->defaultUnit == ProjectSettings::Unit::Cm)
-                               ? QStringLiteral("cm") : QStringLiteral("m");
-            QString valStr = QString::number(m_settings->defaultBuffer, 'f', m_settings->decimals);
-            QString note  = QString::fromUtf8("Domyślny zapas pomiarowy: %1 %2").arg(valStr).arg(unitLabel);
-            out << note << "\r\n";
-        }
         out.flush();
     });
 
@@ -955,20 +802,15 @@ QTextDocument doc;
 
 void ReportDialog::recalc(){
     if (!m_table || m_table->rowCount()==0) {
-        // Brak pomiarów – wyświetl zera w aktualnej jednostce
-        QString zeroStr;
-        if (m_settings->defaultUnit == ProjectSettings::Unit::Cm) {
-            zeroStr = QString::number(0.0, 'f', m_settings->decimals) + QStringLiteral(" cm");
-        } else {
-            zeroStr = QString::number(0.0, 'f', m_settings->decimals) + QStringLiteral(" m");
-        }
+        // Brak pomiarów – wyświetl zera w cm
+        QString zeroStr = QString::number(0.0, 'f', m_settings->decimals) + QStringLiteral(" cm");
         m_sumLen->setText(QString::fromUtf8("Suma długości zmierzonych: ") + zeroStr);
         m_sumBuf->setText(QString::fromUtf8("Suma zapasów: ") + zeroStr);
         m_sumTotal->setText(QString::fromUtf8("Suma łączna: ") + zeroStr);
         return;
     }
-const int COL_CHECK     = 0;
-    const int COL_LEN_M     = 4; // Długość [m] (tekst z " m")
+    const int COL_CHECK     = 0;
+    const int COL_LEN_M     = 4; // Długość [cm]
     const int COL_BUF_START = 6; // cm
     const int COL_BUF_END   = 7; // cm
 
@@ -1001,44 +843,12 @@ const int COL_CHECK     = 0;
     }
 
     double sumTotalM = sumLenM + sumBufM;
-    // Konwersja do aktualnej jednostki
-    QString sumLenStr;
-    QString sumBufStr;
-    QString sumTotalStr;
-    if (m_settings->defaultUnit == ProjectSettings::Unit::Cm) {
-        sumLenStr   = QString("%1 cm").arg(sumLenM * 100.0, 0, 'f', m_settings->decimals);
-        sumBufStr   = QString("%1 cm").arg(sumBufM * 100.0, 0, 'f', m_settings->decimals);
-        sumTotalStr = QString("%1 cm").arg(sumTotalM * 100.0, 0, 'f', m_settings->decimals);
-    } else {
-        sumLenStr   = QString("%1 m").arg(sumLenM, 0, 'f', m_settings->decimals);
-        sumBufStr   = QString("%1 m").arg(sumBufM, 0, 'f', m_settings->decimals);
-        sumTotalStr = QString("%1 m").arg(sumTotalM, 0, 'f', m_settings->decimals);
-    }
+    QString sumLenStr   = QString("%1 cm").arg(sumLenM, 0, 'f', m_settings->decimals);
+    QString sumBufStr   = QString("%1 cm").arg(sumBufM, 0, 'f', m_settings->decimals);
+    QString sumTotalStr = QString("%1 cm").arg(sumTotalM, 0, 'f', m_settings->decimals);
     // Ustaw etykiety sum.  Prefiks jest ustawiany tutaj, zaś wartości są
     // już sformatowane powyżej.
     m_sumLen->setText(QString::fromUtf8("Suma długości zmierzonych: ") + sumLenStr);
     m_sumBuf->setText(QString::fromUtf8("Suma zapasów: ") + sumBufStr);
     m_sumTotal->setText(QString::fromUtf8("Suma łączna: ") + sumTotalStr);
-    // Aktualizuj etykietę informującą o domyślnym zapasie pomiarowym.  Jeśli
-    // domyślny zapas jest większy od zera, wyświetlamy jego wartość w
-    // aktualnej jednostce wraz z liczbą miejsc po przecinku; w przeciwnym
-    // przypadku pozostawiamy etykietę pustą.  Domyślny zapas jest
-    // interpretowany w jednostce projektu.
-    if (m_defaultBufferNote) {
-        if (m_settings->defaultBuffer > 0.0) {
-            QString unitLabel = (m_settings->defaultUnit == ProjectSettings::Unit::Cm)
-                              ? QStringLiteral("cm") : QStringLiteral("m");
-            QString valStr;
-            // Wartość domyślnego zapasu jest przechowywana w jednostce
-            // projektu. Formatowanie z odpowiednią liczbą miejsc po przecinku.
-            valStr = QString::number(m_settings->defaultBuffer, 'f', m_settings->decimals);
-            QString note = QString::fromUtf8("Domyślny zapas pomiarowy: %1 %2")
-                           .arg(valStr).arg(unitLabel);
-            m_defaultBufferNote->setText(note);
-            m_defaultBufferNote->setVisible(true);
-        } else {
-            m_defaultBufferNote->clear();
-            m_defaultBufferNote->setVisible(false);
-        }
-    }
 }
