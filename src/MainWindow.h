@@ -2,6 +2,7 @@
 #include <QMainWindow>
 #include "Settings.h"
 class CanvasWidget;
+class QDockWidget;
 class MainWindow : public QMainWindow {
     Q_OBJECT
 public:
@@ -17,13 +18,6 @@ private slots:
     void onMeasurePolyline();
     void onMeasureAdvanced();
     void onProjectSettings();
-
-    /**
-     * Obsługuje wybór narzędzia z drzewa ToolsDockWidget.  W zależności od
-     * tekstu narzędzia uruchamia odpowiedni tryb w CanvasWidget i
-     * wyświetla powiązany panel ustawień.
-     */
-    void onToolSelected(const QString& tool);
 private:
     CanvasWidget* m_canvas = nullptr;
     ProjectSettings m_settings;
@@ -38,37 +32,9 @@ private:
      *        nie są potrzebne.
      */
     void showMeasurementControls(bool withUndoRedo);
-
-    /**
-     * Wyświetla panel ustawień dla trybu zaznaczania.  Umożliwia zmianę
-     * koloru i grubości linii zaznaczonego pomiaru oraz jego usunięcie.
-     */
-    void showSelectControls();
-
-    /**
-     * Wyświetla panel ustawień dla zaznaczonego elementu tekstowego. Umożliwia
-     * edycję zawartości tekstu, zmianę koloru i czcionki, a także jego usunięcie.
-     */
-    void showTextSelectControls();
-
-    /**
-     * Wyświetla panel ustawień dla wstawiania tekstu.  Panel zawiera
-     * przycisk Anuluj kończący tryb wstawiania.
-     */
-    void showInsertTextControls();
-
-    /**
-     * Wyświetla panel ustawień dla trybu usuwania.  Panel zawiera jedynie
-     * przycisk Anuluj, który przywraca tryb do None.
-     */
-    void showDeleteControls();
-
-    // Panel po lewej z listą narzędzi
-    class ToolsDockWidget* m_toolsDock = nullptr;
-    // Panel po prawej z wyborem obiektu i drzewem kontekstowym
-    class ProjectNavigatorWidget* m_projectDock = nullptr;
+    // Puste panele boczne (lewy/prawy)
+    class QDockWidget* m_leftDock = nullptr;
+    class QDockWidget* m_rightDock = nullptr;
     // Panel dolny z ustawieniami aktualnego narzędzia
     class ToolSettingsWidget* m_settingsDock = nullptr;
-    // Panel górny (ulubione narzędzia)
-    class FavoritesDockWidget* m_favoritesDock = nullptr;
 };

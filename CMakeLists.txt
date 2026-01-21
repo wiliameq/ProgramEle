@@ -35,10 +35,7 @@ add_library(ElecCore STATIC
     src/CalloutItem.h
     src/Dialogs.h src/Dialogs.cpp
     src/Settings.h
-    src/ToolsDockWidget.h src/ToolsDockWidget.cpp
-    src/ProjectNavigatorWidget.h src/ProjectNavigatorWidget.cpp
     src/ToolSettingsWidget.h src/ToolSettingsWidget.cpp
-    src/FavoritesDockWidget.h src/FavoritesDockWidget.cpp
 )
 
 target_link_libraries(ElecCore
