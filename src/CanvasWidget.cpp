@@ -560,35 +560,55 @@ void CanvasWidget::setCurrentLineWidth(int w) {
 }
 
 bool CanvasWidget::loadBackgroundFile(const QString& file) {
-    QFileInfo fi(file);
-    const QString ext = fi.suffix().toLower();
-    if (ext == "pdf") return loadPdfFirstPage(file);
-    QImageReader reader(file); reader.setAutoTransform(true);
-    QImage img = reader.read();
-    if (!img.isNull()) { m_bgImage = img; update(); return true; }
-    return false;
+    QImage img;
+    if (!loadBackgroundImage(file, img)) {
+        return false;
+    }
+    m_bgImage = img;
+    m_showBackground = true;
+    update();
+    return true;
 }
 
-bool CanvasWidget::loadPdfFirstPage(const QString& file) {
-    QPdfDocument pdf;
-    auto err = pdf.load(file);
-    if (err != QPdfDocument::Error::None) return false;
-    if (pdf.pageCount() < 1) return false;
+bool CanvasWidget::loadBackgroundImage(const QString& file, QImage& image) const {
+    QFileInfo fi(file);
+    const QString ext = fi.suffix().toLower();
+    if (ext == "pdf") {
+        QPdfDocument pdf;
+        auto err = pdf.load(file);
+        if (err != QPdfDocument::Error::None) {
+            return false;
+        }
+        if (pdf.pageCount() < 1) {
+            return false;
+        }
 
-    const int pageIndex = 0;
-    const QSizeF pt = pdf.pagePointSize(pageIndex);
-    if (pt.isEmpty()) return false;
+        const int pageIndex = 0;
+        const QSizeF pt = pdf.pagePointSize(pageIndex);
+        if (pt.isEmpty()) {
+            return false;
+        }
 
-    const double targetWidth = 2000.0;
-    const double scale = targetWidth / pt.width();
-    const QSize imgSize(qMax(1, int(pt.width() * scale)),
-                        qMax(1, int(pt.height() * scale)));
+        const double targetWidth = 2000.0;
+        const double scale = targetWidth / pt.width();
+        const QSize imgSize(qMax(1, int(pt.width() * scale)),
+                            qMax(1, int(pt.height() * scale)));
 
-    QImage img = pdf.render(pageIndex, imgSize);
-    if (img.isNull()) return false;
+        QImage rendered = pdf.render(pageIndex, imgSize);
+        if (rendered.isNull()) {
+            return false;
+        }
 
-    m_bgImage = img.convertToFormat(QImage::Format_ARGB32_Premultiplied);
-    update();
+        image = rendered.convertToFormat(QImage::Format_ARGB32_Premultiplied);
+        return true;
+    }
+    QImageReader reader(file);
+    reader.setAutoTransform(true);
+    QImage img = reader.read();
+    if (img.isNull()) {
+        return false;
+    }
+    image = img;
     return true;
 }
 
@@ -615,6 +635,24 @@ bool CanvasWidget::isLayerVisible(const QString& layer) const {
 }
 
 void CanvasWidget::toggleBackgroundVisibility() { m_showBackground = !m_showBackground; update(); }
+void CanvasWidget::setBackgroundVisible(bool visible) {
+    m_showBackground = visible;
+    update();
+}
+
+bool CanvasWidget::hasBackground() const { return !m_bgImage.isNull(); }
+
+bool CanvasWidget::isBackgroundVisible() const { return m_showBackground; }
+
+void CanvasWidget::clearBackground() {
+    m_bgImage = QImage();
+    update();
+}
+
+void CanvasWidget::setBackgroundImage(const QImage& image) {
+    m_bgImage = image;
+    update();
+}
 void CanvasWidget::toggleMeasuresVisibility() {
     m_showMeasures = !m_showMeasures;
     m_measurementsTool.setVisible(m_showMeasures);
