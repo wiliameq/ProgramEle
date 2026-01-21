@@ -1,8 +1,14 @@
 #pragma once
 #include <QMainWindow>
+#include <QVector>
+#include <QStringList>
 #include "Settings.h"
 class CanvasWidget;
 class QDockWidget;
+class QAction;
+class QLabel;
+class QComboBox;
+class QPushButton;
 class MainWindow : public QMainWindow {
     Q_OBJECT
 public:
@@ -17,10 +23,32 @@ private slots:
     void onMeasureLinear();
     void onMeasurePolyline();
     void onMeasureAdvanced();
+    void onNewProject();
+    void onAddBuilding();
+    void onRemoveBuilding();
+    void onRenameBuilding();
+    void onAddFloor();
+    void onRemoveFloor();
+    void onRenameFloor();
+    void onBuildingChanged(int index);
 private:
+    struct Building {
+        QString name;
+        QStringList floors;
+    };
+
     CanvasWidget* m_canvas = nullptr;
     ProjectSettings m_settings;
     void createMenus();
+    void setProjectActive(bool active);
+    void buildProjectPanel();
+    void refreshProjectPanel(int preferredBuildingIndex = -1, int preferredFloorIndex = -1);
+    QString createProjectTempFile(const QString& projectName,
+                                  const QString& address,
+                                  const QString& investor);
+    void writeProjectTempFile();
+    QString nextBuildingName() const;
+    QString nextFloorName(const Building& building) const;
 
     /**
      * Wyświetla w dolnym panelu (ToolSettingsWidget) kontrolki związane z rysowaniem pomiarów.
@@ -36,4 +64,29 @@ private:
     class QDockWidget* m_rightDock = nullptr;
     // Panel dolny z ustawieniami aktualnego narzędzia
     class ToolSettingsWidget* m_settingsDock = nullptr;
+
+    QAction* m_newProjectAction = nullptr;
+    QAction* m_openBackgroundAction = nullptr;
+    QAction* m_reportAction = nullptr;
+    QAction* m_measureLinearAction = nullptr;
+    QAction* m_measurePolylineAction = nullptr;
+    QAction* m_measureAdvancedAction = nullptr;
+    QAction* m_toggleBackgroundAction = nullptr;
+    QAction* m_toggleMeasuresLayerAction = nullptr;
+
+    QLabel* m_projectNameLabel = nullptr;
+    QWidget* m_projectControls = nullptr;
+    QComboBox* m_buildingCombo = nullptr;
+    QComboBox* m_floorCombo = nullptr;
+    QPushButton* m_removeBuildingBtn = nullptr;
+    QPushButton* m_renameBuildingBtn = nullptr;
+    QPushButton* m_removeFloorBtn = nullptr;
+    QPushButton* m_renameFloorBtn = nullptr;
+
+    bool m_projectActive = false;
+    QString m_projectName;
+    QString m_projectAddress;
+    QString m_projectInvestor;
+    QString m_projectFilePath;
+    QVector<Building> m_buildings;
 };
