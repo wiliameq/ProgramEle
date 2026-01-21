@@ -26,7 +26,6 @@
 #include <QMessageBox>
 #include <QRegularExpression>
 #include <QInputDialog>
-#include <algorithm>
 MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent) {
     m_canvas = new CanvasWidget(this, &m_settings);
     setCentralWidget(m_canvas);
@@ -158,7 +157,8 @@ void MainWindow::onRemoveBuilding() {
         return;
     }
     m_buildings.removeAt(index);
-    int nextIndex = std::min(index, m_buildings.size() - 1);
+    int lastIndex = static_cast<int>(m_buildings.size()) - 1;
+    int nextIndex = index < lastIndex ? index : lastIndex;
     refreshProjectPanel(nextIndex, 0);
     writeProjectTempFile();
 }
@@ -214,7 +214,8 @@ void MainWindow::onRemoveFloor() {
         return;
     }
     building.floors.removeAt(floorIndex);
-    int nextFloorIndex = std::min(floorIndex, building.floors.size() - 1);
+    int lastFloorIndex = static_cast<int>(building.floors.size()) - 1;
+    int nextFloorIndex = floorIndex < lastFloorIndex ? floorIndex : lastFloorIndex;
     refreshProjectPanel(index, nextFloorIndex);
     writeProjectTempFile();
 }
