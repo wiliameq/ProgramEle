@@ -46,7 +46,7 @@ struct Measure {
     QString name;
     QColor color = QColor(0,155,0);
     QString unit = "cm";
-    // Global buffer ("domyślny zapas" ustawiany w opcjach programu). Ta
+    // Global buffer (nieużywany, pozostawiony dla zgodności). Ta
     // wartość jest dodawana do każdej długości, ale nie jest wyświetlana w
     // kolumnach "Zapas początkowy" ani "Zapas końcowy" w raporcie.
     double bufferGlobalMeters  = 0.0;
@@ -88,7 +88,7 @@ struct TextItem {
     /**
      * Prostokąt ograniczający tekst w jednostkach świata.  Jest
      * obliczany w momencie wstawiania lub edycji tekstu przy użyciu
-     * QFontMetrics i przeliczany na jednostki świata (metry).  Używany
+     * QFontMetrics i przeliczany na jednostki świata (cm).  Używany
      * do detekcji kliknięć i zaznaczania tekstu.
      */
     QRectF boundingRect;
@@ -169,7 +169,7 @@ private:
     // Measures layer
     bool m_showMeasures = true;
 
-    // Scale
+    // Scale (piksele na centymetr)
     double m_pixelsPerMeter = 100.0;
     QPointF m_firstPoint; bool m_hasFirst = false;
 
@@ -351,7 +351,7 @@ public:
     void defineScalePromptAndApply(const QPointF& secondPoint);
     QPointF toWorld(const QPointF& screen) const;
     QPointF toScreen(const QPointF& world) const;
-    double polyLengthMeters(const std::vector<QPointF>& pts) const;
+    double polyLengthCm(const std::vector<QPointF>& pts) const;
     QString fmtLenInProjectUnit(double m) const;
     void finishCurrentMeasure(QWidget* parentForAdvanced = nullptr);
     void drawMeasures(QPainter& p);
@@ -564,15 +564,6 @@ public:
      * ustawień globalnych.
      */
     void setCurrentLineWidth(int w);
-
-    /**
-     * Aktualizuje globalny zapas (bufferGlobalMeters) dla wszystkich istniejących
-     * pomiarów na wartość zdefiniowaną w ustawieniach projektu
-     * (m_settings->defaultBuffer). Wartość ta jest konwertowana do metrów
-     * zgodnie z m_settings->defaultUnit. Po aktualizacji całkowita długość
-     * z zapasami (totalWithBufferMeters) każdego pomiaru jest przeliczana.
-     */
-    void updateAllMeasureGlobalBuffers();
 
     /**
      * Aktualizuje grubość linii wszystkich istniejących pomiarów na wartość
