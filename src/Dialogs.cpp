@@ -1,7 +1,7 @@
 
 #include "Dialogs.h"
 #include "Settings.h"
-#include "CanvasWidget.h"
+#include "Measurements.h"
 
 #include <QVBoxLayout>
 #include <QHBoxLayout>

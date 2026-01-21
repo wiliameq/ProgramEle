@@ -60,6 +60,9 @@ add_executable(${PROJECT_NAME}
     src/main.cpp
     src/MainWindow.h src/MainWindow.cpp
     src/CanvasWidget.h src/CanvasWidget.cpp
+    src/Measurements.h
+    src/MeasurementsTool.h src/MeasurementsTool.cpp
+    src/ToolModule.h
 )
 
 target_link_libraries(${PROJECT_NAME}

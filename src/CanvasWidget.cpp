@@ -1,6 +1,5 @@
 #include "CanvasWidget.h"
 #include <unordered_map>
-#include "Dialogs.h"
 #include "Settings.h"
 
 #include <QPainter>
@@ -120,17 +119,11 @@ QRectF bubbleRectForAnchor(const QPointF &anchorPos, const QSizeF &sizeWorld,
 } // namespace
 
 CanvasWidget::CanvasWidget(QWidget* parent, ProjectSettings* settings)
-    : QWidget(parent), m_settings(settings) {
+    : QWidget(parent)
+    , m_settings(settings)
+    , m_measurementsTool(this, [this]() { emit measurementFinished(); }) {
     setMouseTracking(true);
     setFocusPolicy(Qt::StrongFocus);
-    // Inicjalizuj lokalne wartości koloru i grubości linii z globalnych ustawień.
-    if (m_settings) {
-        m_currentColor     = m_settings->defaultMeasureColor;
-        m_currentLineWidth = m_settings->lineWidthPx;
-    }
-
-    // Inicjuj dodatkowe pola narzędzi
-    m_selectedMeasureIndex = -1;
 
     // Inicjuj domyślną widoczność warstw.  Wszystkie znane warstwy są
     // domyślnie ustawiane jako widoczne.  Niektóre warstwy (np. gniazda
@@ -144,6 +137,7 @@ CanvasWidget::CanvasWidget(QWidget* parent, ProjectSettings* settings)
     m_layerVisibility[QStringLiteral("Gniazda RJ45")] = true;
     m_layerVisibility[QStringLiteral("Pomiary")]     = true;
     m_layerVisibility[QStringLiteral("Komentarze")]  = true;
+    m_measurementsTool.setVisible(m_showMeasures);
 
     // Ustaw domyślne kolory dla nowo wstawianych dymków
     m_insertBubbleFillColor = QColor(255, 255, 255, 200);
@@ -159,40 +153,26 @@ CanvasWidget::CanvasWidget(QWidget* parent, ProjectSettings* settings)
 
 // --- modyfikacje bieżącego pomiaru ---
 void CanvasWidget::cancelCurrentMeasure() {
-    // Anulowanie: czyść aktualne punkty, stos redo i wróć do trybu None
-    m_currentPts.clear();
-    m_redoPts.clear();
+    m_measurementsTool.cancelCurrentMeasure();
+    m_activeTool = nullptr;
     m_mode = ToolMode::None;
-    // Usuń zaznaczone elementy i zatrzymaj przeciąganie tekstu
-    m_selectedMeasureIndex = -1;
     m_selectedTextIndex = -1;
     m_isDraggingSelectedText = false;
-    // Przywróć domyślny kursor
     unsetCursor();
-    update();
 }
 
 void CanvasWidget::undoCurrentMeasure() {
-    if (!m_currentPts.empty()) {
-        // Przenieś ostatni punkt z m_currentPts do m_redoPts
-        m_redoPts.push_back(m_currentPts.back());
-        m_currentPts.pop_back();
-        update();
-    }
+    m_measurementsTool.undoCurrentMeasure();
 }
 
 void CanvasWidget::redoCurrentMeasure() {
-    if (!m_redoPts.empty()) {
-        // Przywróć ostatnio cofnięty punkt
-        m_currentPts.push_back(m_redoPts.back());
-        m_redoPts.pop_back();
-        update();
-    }
+    m_measurementsTool.redoCurrentMeasure();
 }
 
 void CanvasWidget::confirmCurrentMeasure(QWidget* parentForAdvanced) {
-    // Zatwierdzenie aktualnego pomiaru jest tożsame z zakończeniem pomiaru
-    finishCurrentMeasure(parentForAdvanced);
+    m_measurementsTool.confirmCurrentMeasure(parentForAdvanced);
+    m_activeTool = nullptr;
+    unsetCursor();
 }
 
 void CanvasWidget::insertPendingText(const QString& text) {
@@ -248,10 +228,8 @@ void CanvasWidget::insertPendingText(const QString& text) {
 }
 
 void CanvasWidget::updateAllMeasureColors() {
-    for (auto &m : m_measures) {
-        m.color = m_settings->defaultMeasureColor;
-    }
-    update();
+    if (!m_settings) return;
+    m_measurementsTool.updateAllMeasureColors(m_settings->defaultMeasureColor);
 }
 
 // Aktualizuje grubość linii wszystkich istniejących pomiarów na wartość
@@ -259,20 +237,16 @@ void CanvasWidget::updateAllMeasureColors() {
 // rysowanego pomiaru ani wartości m_currentLineWidth.
 void CanvasWidget::updateAllMeasureLineWidths() {
     if (!m_settings) return;
-    for (auto &m : m_measures) {
-        m.lineWidthPx = qBound(1, m_settings->lineWidthPx, 8);
-    }
-    update();
+    m_measurementsTool.updateAllMeasureLineWidths(m_settings->lineWidthPx);
 }
 
 // Rozpoczyna tryb zaznaczania istniejących pomiarów.  Czyści bieżące
 // punkty i stos cofnięć, ustawia m_mode i resetuje zaznaczenie.
 void CanvasWidget::startSelect() {
     m_mode = ToolMode::Select;
-    m_currentPts.clear();
-    m_redoPts.clear();
     m_pendingText.clear();
-    m_selectedMeasureIndex = -1;
+    m_measurementsTool.deactivate();
+    m_activeTool = nullptr;
     // Clear text selection and dragging state when entering selection mode
     m_selectedTextIndex = -1;
     m_isDraggingSelectedText = false;
@@ -296,9 +270,8 @@ void CanvasWidget::startInsertText(QWidget* parent) {
     // ustawić pozycję kotwicy dymka (koniec strzałki).  Dymek oraz
     // pole edycyjne zostaną utworzone po tym kliknięciu.  Czyścimy
     // punkty pomiaru i zaznaczenie pomiarów/tekstów.
-    m_currentPts.clear();
-    m_redoPts.clear();
-    m_selectedMeasureIndex = -1;
+    m_measurementsTool.deactivate();
+    m_activeTool = nullptr;
     m_selectedTextIndex = -1;
     // Resetuj flagi wstawiania tekstu
     m_hasTextInsertPos = false;
@@ -318,10 +291,9 @@ void CanvasWidget::startInsertText(QWidget* parent) {
 // oraz zaznaczenie.
 void CanvasWidget::startDelete() {
     m_mode = ToolMode::Delete;
-    m_currentPts.clear();
-    m_redoPts.clear();
     m_pendingText.clear();
-    m_selectedMeasureIndex = -1;
+    m_measurementsTool.deactivate();
+    m_activeTool = nullptr;
     // Clear text selection and stop any dragging
     m_selectedTextIndex = -1;
     m_isDraggingSelectedText = false;
@@ -332,19 +304,12 @@ void CanvasWidget::startDelete() {
 
 // Ustawia kolor zaznaczonego pomiaru
 void CanvasWidget::setSelectedMeasureColor(const QColor &c) {
-    if (m_selectedMeasureIndex >= 0 && m_selectedMeasureIndex < (int)m_measures.size()) {
-        m_measures[m_selectedMeasureIndex].color = c;
-        update();
-    }
+    m_measurementsTool.setSelectedMeasureColor(c);
 }
 
 // Ustawia grubość linii zaznaczonego pomiaru
 void CanvasWidget::setSelectedMeasureLineWidth(int w) {
-    if (m_selectedMeasureIndex >= 0 && m_selectedMeasureIndex < (int)m_measures.size()) {
-        int bounded = qBound(1, w, 8);
-        m_measures[m_selectedMeasureIndex].lineWidthPx = bounded;
-        update();
-    }
+    m_measurementsTool.setSelectedMeasureLineWidth(w);
 }
 
 // --------- Operacje na tekście ---------
@@ -576,39 +541,22 @@ void CanvasWidget::startEditExistingText(int index) {
 
 // Usuwa zaznaczony pomiar
 void CanvasWidget::deleteSelectedMeasure() {
-    if (m_selectedMeasureIndex >= 0 && m_selectedMeasureIndex < (int)m_measures.size()) {
-        m_measures.erase(m_measures.begin() + m_selectedMeasureIndex);
-        m_selectedMeasureIndex = -1;
-        update();
-    }
+    m_measurementsTool.deleteSelectedMeasure();
 }
 
 /**
  * Ustawia kolor bieżącego pomiaru.  Nie modyfikuje domyślnego koloru w
- * m_settings. Jeśli pomiar jest typu MeasureAdvanced, aktualizuje
- * równocześnie kolor w szablonie, aby zmiana została zapisana w
- * zmienionej kopii m_advTemplate w finishCurrentMeasure.
+ * m_settings. Zmiana jest przekazywana do aktywnego modułu pomiarów.
  */
 void CanvasWidget::setCurrentColor(const QColor &c) {
-    m_currentColor = c;
-    // Jeśli pomiar zaawansowany, zmień kolor w szablonie
-    if (m_mode == ToolMode::MeasureAdvanced) {
-        m_advTemplate.color = c;
-    }
-    update();
+    m_measurementsTool.setCurrentColor(c);
 }
 
 /**
  * Ustawia grubość linii bieżącego pomiaru. Nie modyfikuje ustawień globalnych.
- * Jeśli pomiar jest zaawansowany, grubość jest też przypisywana do
- * szablonu, aby była zapisana wraz z pomiarem.
  */
 void CanvasWidget::setCurrentLineWidth(int w) {
-    m_currentLineWidth = qBound(1, w, 8);
-    if (m_mode == ToolMode::MeasureAdvanced) {
-        m_advTemplate.lineWidthPx = m_currentLineWidth;
-    }
-    update();
+    m_measurementsTool.setCurrentLineWidth(w);
 }
 
 bool CanvasWidget::loadBackgroundFile(const QString& file) {
@@ -667,66 +615,43 @@ bool CanvasWidget::isLayerVisible(const QString& layer) const {
 }
 
 void CanvasWidget::toggleBackgroundVisibility() { m_showBackground = !m_showBackground; update(); }
-void CanvasWidget::toggleMeasuresVisibility() { m_showMeasures = !m_showMeasures; update(); }
-void CanvasWidget::startScaleDefinition(double) { m_hasFirst = false; m_mode = ToolMode::DefineScale; }
+void CanvasWidget::toggleMeasuresVisibility() {
+    m_showMeasures = !m_showMeasures;
+    m_measurementsTool.setVisible(m_showMeasures);
+    update();
+}
+void CanvasWidget::startScaleDefinition(double) {
+    m_hasFirst = false;
+    m_mode = ToolMode::DefineScale;
+    m_measurementsTool.deactivate();
+    m_activeTool = nullptr;
+}
 
 void CanvasWidget::startMeasureLinear() {
-    // Rozpocznij rysowanie odcinka: wyczyść punkty i stos cofnięć
-    m_mode = ToolMode::MeasureLinear;
-    m_currentPts.clear();
-    m_redoPts.clear();
-    m_selectedMeasureIndex = -1;
+    m_mode = ToolMode::None;
     m_selectedTextIndex = -1;
     m_isDraggingSelectedText = false;
+    m_measurementsTool.startLinear();
+    m_activeTool = &m_measurementsTool;
     setCursor(Qt::CrossCursor);
-    // Ustaw początkowy kolor i grubość linii na podstawie ustawień globalnych
-    if (m_settings) {
-        m_currentColor     = m_settings->defaultMeasureColor;
-        m_currentLineWidth = m_settings->lineWidthPx;
-    }
 }
 void CanvasWidget::startMeasurePolyline() {
-    // Rozpocznij rysowanie polilinii: czyść listę punktów i stos cofnięć
-    m_mode = ToolMode::MeasurePolyline;
-    m_currentPts.clear();
-    m_redoPts.clear();
-    m_selectedMeasureIndex = -1;
+    m_mode = ToolMode::None;
     m_selectedTextIndex = -1;
     m_isDraggingSelectedText = false;
+    m_measurementsTool.startPolyline();
+    m_activeTool = &m_measurementsTool;
     setCursor(Qt::CrossCursor);
-    // Ustaw początkowy kolor i grubość linii na podstawie ustawień globalnych
-    if (m_settings) {
-        m_currentColor     = m_settings->defaultMeasureColor;
-        m_currentLineWidth = m_settings->lineWidthPx;
-    }
 }
 void CanvasWidget::startMeasureAdvanced(QWidget* parent) {
-    AdvancedMeasureDialog dlg(parent, m_settings);
-    // Jeśli użytkownik anulował, nie zmieniaj stanu
-    if (dlg.exec() != QDialog::Accepted) return;
-    // Przygotuj szablon pomiaru zaawansowanego na podstawie dialogu
-    m_advTemplate = Measure{};
-    m_advTemplate.type = MeasureType::Advanced;
-    m_advTemplate.name = dlg.name();
-    m_advTemplate.color = dlg.color();
-    // Jednostka pomiaru jest stała (cm)
-    m_advTemplate.unit  = QStringLiteral("cm");
-    // Domyślny zapas z dialogu jest podany w cm
-    m_advTemplate.bufferDefaultMeters = dlg.bufferValue();
-    // Inicjalizuj lokalny kolor i szerokość linii z wartości dialogu i globalnych ustawień.
-    // Kolor pochodzi z dialogu zaawansowanego; grubość linii z ustawień globalnych.
-    m_currentColor     = dlg.color();
-    if (m_settings) {
-        m_currentLineWidth = m_settings->lineWidthPx;
+    m_measurementsTool.startAdvanced(parent);
+    if (!m_measurementsTool.isActive()) {
+        return;
     }
-    // Przypisz grubość linii do szablonu, aby zachować ją przy zapisie pomiaru.
-    m_advTemplate.lineWidthPx = m_currentLineWidth;
-    // Rozpocznij tryb rysowania zaawansowanego
-    m_mode = ToolMode::MeasureAdvanced;
-    m_currentPts.clear();
-    m_selectedMeasureIndex = -1;
+    m_mode = ToolMode::None;
     m_selectedTextIndex = -1;
     m_isDraggingSelectedText = false;
+    m_activeTool = &m_measurementsTool;
     setCursor(Qt::CrossCursor);
 }
 
@@ -744,7 +669,10 @@ void CanvasWidget::paintEvent(QPaintEvent*) {
         p.drawImage(QPointF(0,0), m_bgImage);
     }
 
-    if (m_showMeasures) drawMeasures(p);
+    if (m_showMeasures) {
+        m_measurementsTool.draw(p);
+    }
+    drawTextItems(p);
     drawOverlay(p); // overlay is also in world coords
 
     p.resetTransform();
@@ -752,51 +680,8 @@ void CanvasWidget::paintEvent(QPaintEvent*) {
     p.drawText(10, height()-10, "PPM: pan, kółko/+/-: zoom; Pomiary: menu; Enter kończy; Ctrl+Enter zatwierdza komentarz; Backspace cofa; Esc anuluje");
 }
 
-void CanvasWidget::drawMeasures(QPainter& p) {
+void CanvasWidget::drawTextItems(QPainter& p) {
     p.setRenderHint(QPainter::Antialiasing, true);
-    // Rysuj każdy pomiar wraz z etykietą.  Jeśli pomiar jest zaznaczony,
-    // w następnym kroku zostanie nałożona obwódka.
-    for (size_t idx = 0; idx < m_measures.size(); ++idx) {
-        const auto &m = m_measures[idx];
-        // Pomijamy pomiar, jeśli jest ukryty lub jego warstwa jest wyłączona
-        if (!m.visible || !isLayerVisible(m.layer)) continue;
-        QPen pen(m.color, m.lineWidthPx);
-        pen.setCosmetic(true);
-        p.setPen(pen);
-        // Rysuj segmenty pomiaru
-        if (m.pts.size() >= 2) {
-            for (size_t i=1; i<m.pts.size(); ++i) {
-                p.drawLine(m.pts[i-1], m.pts[i]);
-            }
-        }
-        // Etykieta długości
-        if (!m.pts.empty()) {
-            QString label = fmtLenInProjectUnit(m.totalWithBufferMeters);
-            QFontMetrics fm(p.font());
-            int textW = fm.horizontalAdvance(label) + 10;
-            int textH = fm.height() + 4;
-            QPointF mid = m.pts[m.pts.size()/2];
-            QRectF box(mid + QPointF(8, -textH - 4), QSizeF(textW, textH));
-            p.setPen(QPen(Qt::black));
-            p.fillRect(box, QColor(255,255,255,200));
-            p.drawText(box, Qt::AlignLeft | Qt::AlignVCenter, label);
-        }
-    }
-    // Jeśli jest zaznaczony pomiar, nałóż na niego obwódkę czerwoną przerywaną
-    if (m_selectedMeasureIndex >= 0 && m_selectedMeasureIndex < (int)m_measures.size()) {
-        const auto &mSel = m_measures[m_selectedMeasureIndex];
-        // Rysuj obwódkę tylko, jeśli pomiar jest widoczny i jego warstwa jest aktywna
-        if (mSel.visible && isLayerVisible(mSel.layer) && mSel.pts.size() >= 2) {
-            QPen pen(QColor(255,0,0), mSel.lineWidthPx);
-            pen.setStyle(Qt::DashLine);
-            pen.setCosmetic(true);
-            p.setPen(pen);
-            for (size_t i=1; i<mSel.pts.size(); ++i) {
-                p.drawLine(mSel.pts[i-1], mSel.pts[i]);
-            }
-        }
-    }
-    // Na końcu narysuj wszystkie wstawione teksty
     for (size_t ti = 0; ti < m_textItems.size(); ++ti) {
         const auto &txt = m_textItems[ti];
         if (txt.text.isEmpty()) continue;
@@ -971,37 +856,7 @@ void CanvasWidget::drawMeasures(QPainter& p) {
 }
 
 void CanvasWidget::drawOverlay(QPainter& p) {
-    if (m_mode == ToolMode::MeasureLinear || m_mode == ToolMode::MeasurePolyline || m_mode == ToolMode::MeasureAdvanced) {
-        if (!m_currentPts.empty()) {
-            QPen pen(Qt::DashLine);
-            // Używaj lokalnie wybranych parametrów zamiast ustawień globalnych czy z szablonu
-            pen.setColor(m_currentColor);
-            pen.setWidth(m_currentLineWidth);
-            pen.setCosmetic(true);
-            p.setPen(pen);
-            // existing segments
-            for (size_t i=1;i<m_currentPts.size();++i) p.drawLine(m_currentPts[i-1], m_currentPts[i]);
-            // live segment to mouse
-            double L = polyLengthCm(m_currentPts);
-            if (m_hasMouseWorld) {
-                p.drawLine(m_currentPts.back(), m_mouseWorld);
-                double dx = m_mouseWorld.x() - m_currentPts.back().x();
-                double dy = m_mouseWorld.y() - m_currentPts.back().y();
-                L += std::hypot(dx, dy) / safePixelsPerMeter(m_pixelsPerMeter, 1.0);
-            }
-            // Etykieta przy ostatnim punkcie (lub przy kursorku, jeśli jest)
-            QPointF at = m_hasMouseWorld ? m_mouseWorld : m_currentPts.back();
-            // Tekst do wyświetlenia
-            QString text = fmtLenInProjectUnit(L);
-            QFontMetrics fm(p.font());
-            int textW = fm.horizontalAdvance(text) + 10;
-            int textH = fm.height() + 4;
-            QRectF box(at + QPointF(8, -textH - 4), QSizeF(textW, textH));
-            p.setPen(QPen(Qt::black));
-            p.fillRect(box, QColor(255,255,255,200));
-            p.drawText(box, Qt::AlignLeft | Qt::AlignVCenter, text);
-        }
-    }
+    m_measurementsTool.drawOverlay(p, m_hasMouseWorld, m_mouseWorld);
 }
 
 void CanvasWidget::mousePressEvent(QMouseEvent* ev) {
@@ -1031,19 +886,8 @@ void CanvasWidget::mousePressEvent(QMouseEvent* ev) {
         else { defineScalePromptAndApply(pos); m_hasFirst = false; m_mode = ToolMode::None; }
         return;
     }
-    if (m_mode == ToolMode::MeasureLinear) {
-        // Dodaj punkt i wyczyść stos przywracania, aby redo odnosił się tylko do bieżącej sekwencji
-        m_currentPts.push_back(pos);
-        m_redoPts.clear();
-        // linia wymaga dwóch punktów; po drugim zakończ pomiar
-        if (m_currentPts.size()==2) { finishCurrentMeasure(); }
-        update(); return;
-    }
-    if (m_mode == ToolMode::MeasurePolyline || m_mode == ToolMode::MeasureAdvanced) {
-        // Dodaj punkt do polilinii/zaawansowanej i zeruj historię redo
-        m_currentPts.push_back(pos);
-        m_redoPts.clear();
-        update(); return;
+    if (m_activeTool && m_activeTool->mousePress(ev)) {
+        return;
     }
     // Tryb zaznaczania: wybierz pomiar lub tekst
     if (m_mode == ToolMode::Select) {
@@ -1065,7 +909,7 @@ void CanvasWidget::mousePressEvent(QMouseEvent* ev) {
         }
         if (anchorIdx >= 0) {
             m_selectedTextIndex = anchorIdx;
-            m_selectedMeasureIndex = -1;
+            m_measurementsTool.clearSelection();
             m_isDraggingSelectedAnchor = true;
             m_isDraggingSelectedText = false;
             update();
@@ -1089,7 +933,7 @@ void CanvasWidget::mousePressEvent(QMouseEvent* ev) {
         }
         if (resizeIdx >= 0) {
             m_selectedTextIndex = resizeIdx;
-            m_selectedMeasureIndex = -1;
+            m_measurementsTool.clearSelection();
             m_resizeHandle = handle;
             m_isResizingSelectedBubble = true;
             QPointF topLeftScreen = toScreen(m_textItems[resizeIdx].boundingRect.topLeft());
@@ -1119,7 +963,7 @@ void CanvasWidget::mousePressEvent(QMouseEvent* ev) {
         }
         if (bubbleIdx >= 0) {
             m_selectedTextIndex = bubbleIdx;
-            m_selectedMeasureIndex = -1;
+            m_measurementsTool.clearSelection();
             m_isDraggingSelectedText = true;
             m_isDraggingSelectedAnchor = false;
             // Offset między kliknięciem a lewym górnym rogiem dymka
@@ -1129,31 +973,8 @@ void CanvasWidget::mousePressEvent(QMouseEvent* ev) {
             return;
         }
         // W przeciwnym razie szukaj najbliższego pomiaru
-        int idx = -1;
         double bestDist = 5.0 / m_zoom; // próg w jednostkach world (przybliżony)
-        for (size_t i = 0; i < m_measures.size(); ++i) {
-            const auto &m = m_measures[i];
-            if (!m.visible || m.pts.size() < 2) continue;
-            // Sprawdź odległość do każdej krawędzi
-            for (size_t j=1; j < m.pts.size(); ++j) {
-                QPointF a = m.pts[j-1];
-                QPointF b = m.pts[j];
-                QPointF ab = b - a;
-                double ab2 = ab.x()*ab.x() + ab.y()*ab.y();
-                if (ab2 == 0.0) continue;
-                double t = ((wpos - a).x()*ab.x() + (wpos - a).y()*ab.y()) / ab2;
-                t = std::max(0.0, std::min(1.0, t));
-                QPointF proj = a + t * ab;
-                double dx = proj.x() - wpos.x();
-                double dy = proj.y() - wpos.y();
-                double dist = std::sqrt(dx*dx + dy*dy);
-                if (dist <= bestDist) {
-                    bestDist = dist;
-                    idx = (int)i;
-                }
-            }
-        }
-        m_selectedMeasureIndex = idx;
+        m_measurementsTool.selectMeasureAt(wpos, bestDist);
         m_selectedTextIndex = -1;
         update();
         return;
@@ -1313,34 +1134,9 @@ void CanvasWidget::mousePressEvent(QMouseEvent* ev) {
             }
         }
         // W przeciwnym razie usuń najbliższy pomiar
-        int idx = -1;
         double bestDist = 5.0 / m_zoom;
-        for (size_t i = 0; i < m_measures.size(); ++i) {
-            const auto &m = m_measures[i];
-            if (!m.visible || m.pts.size() < 2) continue;
-            for (size_t j=1; j < m.pts.size(); ++j) {
-                QPointF a = m.pts[j-1];
-                QPointF b = m.pts[j];
-                QPointF ab = b - a;
-                double ab2 = ab.x()*ab.x() + ab.y()*ab.y();
-                if (ab2 == 0.0) continue;
-                double t = ((wpos - a).x()*ab.x() + (wpos - a).y()*ab.y()) / ab2;
-                t = std::max(0.0, std::min(1.0, t));
-                QPointF proj = a + t * ab;
-                double dx = proj.x() - wpos.x();
-                double dy = proj.y() - wpos.y();
-                double dist = std::sqrt(dx*dx + dy*dy);
-                if (dist <= bestDist) {
-                    bestDist = dist;
-                    idx = (int)i;
-                }
-            }
-        }
-        if (idx >= 0) {
-            m_measures.erase(m_measures.begin() + idx);
-            if (m_selectedMeasureIndex == idx) m_selectedMeasureIndex = -1;
-            else if (m_selectedMeasureIndex > idx) m_selectedMeasureIndex--;
-            update();
+        if (m_measurementsTool.selectMeasureAt(wpos, bestDist)) {
+            m_measurementsTool.deleteSelectedMeasure();
         }
         return;
     }
@@ -1350,6 +1146,9 @@ void CanvasWidget::mousePressEvent(QMouseEvent* ev) {
 void CanvasWidget::mouseDoubleClickEvent(QMouseEvent* ev) {
     if (ev->button() != Qt::LeftButton) {
         QWidget::mouseDoubleClickEvent(ev);
+        return;
+    }
+    if (m_activeTool && m_activeTool->mouseDoubleClick(ev)) {
         return;
     }
     if (m_mode == ToolMode::Select) {
@@ -1537,6 +1336,9 @@ void CanvasWidget::mouseMoveEvent(QMouseEvent* ev) {
     }
     m_mouseWorld = toWorld(ev->position());
     m_hasMouseWorld = true;
+    if (m_activeTool) {
+        m_activeTool->mouseMove(ev, m_mouseWorld);
+    }
     update();
     QWidget::mouseMoveEvent(ev);
 }
@@ -1544,6 +1346,9 @@ void CanvasWidget::mouseMoveEvent(QMouseEvent* ev) {
 void CanvasWidget::mouseReleaseEvent(QMouseEvent* ev) {
     if (ev->button() == Qt::RightButton) {
         m_isPanning = false;
+        return;
+    }
+    if (m_activeTool && m_activeTool->mouseRelease(ev)) {
         return;
     }
     // Zakończ przeciąganie dymków i kotwic
@@ -1681,7 +1486,7 @@ void CanvasWidget::commitTextEdit() {
             ti.boundingRect = QRectF(x_m, y_m, w_m, h_m);
             // Ustaw zaznaczenie na edytowany element
             m_selectedTextIndex = m_editingTextIndex;
-            m_selectedMeasureIndex = -1;
+            m_measurementsTool.clearSelection();
         }
         m_editingTextIndex = -1;
         m_mode = ToolMode::None;
@@ -1795,7 +1600,7 @@ void CanvasWidget::commitTempTextItem() {
     m_textItems.push_back(m_tempTextItem);
     // Ustaw zaznaczenie na nowo dodany element
     m_selectedTextIndex = (int)m_textItems.size() - 1;
-    m_selectedMeasureIndex = -1;
+    m_measurementsTool.clearSelection();
     // Resetuj stan tymczasowego dymka
     m_hasTempTextItem = false;
     m_isDraggingTempBubble = false;
@@ -1865,15 +1670,14 @@ void CanvasWidget::cancelTextEdit() {
 }
 
 void CanvasWidget::keyPressEvent(QKeyEvent* ev) {
+    if (m_activeTool && m_activeTool->keyPress(ev, this)) {
+        return;
+    }
     switch (ev->key()) {
         case Qt::Key_Return:
         case Qt::Key_Enter:
-            if (m_mode == ToolMode::MeasurePolyline || m_mode == ToolMode::MeasureAdvanced) {
-                finishCurrentMeasure(this);
-            }
             break;
         case Qt::Key_Backspace:
-            if (!m_currentPts.empty()) { m_currentPts.pop_back(); update(); }
             break;
         case Qt::Key_Plus:
         case Qt::Key_Equal: {
@@ -1910,8 +1714,9 @@ void CanvasWidget::keyPressEvent(QKeyEvent* ev) {
                 // Ogólne anulowanie: wyczyść punkty i zaznaczenia
                 m_mode = ToolMode::None;
                 m_hasFirst = false;
-                m_currentPts.clear();
-                m_selectedMeasureIndex = -1;
+                m_measurementsTool.deactivate();
+                m_activeTool = nullptr;
+                m_measurementsTool.clearSelection();
                 m_selectedTextIndex = -1;
                 m_isDraggingSelectedText = false;
                 m_isDraggingSelectedAnchor = false;
@@ -1957,90 +1762,7 @@ void CanvasWidget::defineScalePromptAndApply(const QPointF& secondPoint) {
     update();
 }
 
-double CanvasWidget::polyLengthCm(const std::vector<QPointF>& pts) const {
-    if (pts.size() < 2) return 0.0;
-    double px=0.0;
-    for (size_t i=1;i<pts.size();++i) {
-        const double dx = pts[i].x() - pts[i-1].x();
-        const double dy = pts[i].y() - pts[i-1].y();
-        px += std::hypot(dx, dy);
-    }
-    return px / safePixelsPerMeter(m_pixelsPerMeter, 1.0);
-}
-
-QString CanvasWidget::fmtLenInProjectUnit(double m) const {
-    // Długość w centymetrach; użyj globalnej liczby miejsc po przecinku
-    return QString("%1 cm").arg(m, 0, 'f', m_settings->decimals);
-}
-
-void CanvasWidget::finishCurrentMeasure(QWidget* parentForAdvanced) {
-    if (m_currentPts.size() < 2) { m_currentPts.clear(); m_mode = ToolMode::None; update(); return; }
-    Measure mm;
-    mm.createdAt = QDateTime::currentDateTime();
-    mm.pts = m_currentPts;
-    // set type & default unit/color
-    if (m_mode == ToolMode::MeasureLinear) {
-        mm.type = MeasureType::Linear;
-        mm.unit = QStringLiteral("cm");
-        // Kolor i grubość linii pobieramy z lokalnych parametrów bieżącego pomiaru
-        mm.color = m_currentColor;
-        mm.lineWidthPx = m_currentLineWidth;
-        // Ustaw wartości zapasów: globalny 0, początkowy i końcowy na 0
-        mm.bufferGlobalMeters  = 0.0;
-        mm.bufferDefaultMeters = 0.0;
-        mm.bufferFinalMeters   = 0.0;
-    } else if (m_mode == ToolMode::MeasurePolyline) {
-        mm.type = MeasureType::Polyline;
-        mm.unit = QStringLiteral("cm");
-        mm.color = m_currentColor;
-        mm.lineWidthPx = m_currentLineWidth;
-        // Ustaw zapas globalny; brak zapasów początkowych i końcowych
-        mm.bufferGlobalMeters  = 0.0;
-        mm.bufferDefaultMeters = 0.0;
-        mm.bufferFinalMeters   = 0.0;
-    } else { // Advanced
-        // Szablon m_advTemplate ma już ustawiony kolor, grubość linii, nazwę,
-        // jednostkę oraz zapas początkowy. Skopiuj go jako podstawę nowego pomiaru.
-        mm = m_advTemplate;
-        mm.createdAt = QDateTime::currentDateTime();
-        mm.pts = m_currentPts;
-        // Ustaw globalny zapas: brak globalnego zapasu (wartość 0).
-        mm.bufferGlobalMeters = 0.0;
-        if (mm.name.isEmpty()) { /* leave empty; will be set to default below */ }
-        // Zapas końcowy w cm.
-        FinalBufferDialog fd(parentForAdvanced, m_settings);
-        if (fd.exec() == QDialog::Accepted) {
-            double val = fd.bufferValue();
-            mm.bufferFinalMeters = val;
-        } else {
-            // Jeśli dialog został anulowany, ustaw zapas końcowy na 0
-            mm.bufferFinalMeters = 0.0;
-        }
-    }
-    // assign id exactly once
-    mm.id = m_nextId++;
-    // default name if empty: "Pomiar <id>"
-    if (mm.name.isEmpty()) mm.name = QString("Pomiar %1").arg(mm.id);
-    // compute lengths
-    mm.lengthMeters = polyLengthCm(mm.pts);
-    // Całkowita długość z zapasami obejmuje długość, globalny zapas,
-    // zapas początkowy oraz zapas końcowy.
-    mm.totalWithBufferMeters = mm.lengthMeters + mm.bufferGlobalMeters + mm.bufferDefaultMeters + mm.bufferFinalMeters;
-    m_measures.push_back(mm);
-    m_currentPts.clear();
-    m_mode = ToolMode::None;
-    update();
-
-    // Powiadom zainteresowane moduły (np. MainWindow), że pomiar został
-    // zakończony.  Dzięki temu interfejs może automatycznie schować panel
-    // ustawień narzędzia bez konieczności ręcznej obsługi w każdym
-    // miejscu, w którym kończy się rysowanie.
-    emit measurementFinished();
-}
-
 void CanvasWidget::openReportDialog(QWidget* parent)
 {
-    ReportDialog dlg(parent, m_settings, &m_measures);
-    dlg.exec();
-    update();
+    m_measurementsTool.openReportDialog(parent);
 }
