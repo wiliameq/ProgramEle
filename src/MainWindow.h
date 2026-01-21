@@ -17,7 +17,6 @@ private slots:
     void onMeasureLinear();
     void onMeasurePolyline();
     void onMeasureAdvanced();
-    void onProjectSettings();
 private:
     CanvasWidget* m_canvas = nullptr;
     ProjectSettings m_settings;

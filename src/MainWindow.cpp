@@ -1,6 +1,5 @@
 #include "MainWindow.h"
 #include "CanvasWidget.h"
-#include "Dialogs.h"
 #include "ToolSettingsWidget.h"
 
 #include <QMenuBar>
@@ -18,8 +17,6 @@
 #include <QColorDialog>
 #include <QMessageBox>
 #include <QInputDialog>
-// std::abs używany do porównywania wartości double
-#include <cmath>
 MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent) {
     m_canvas = new CanvasWidget(this, &m_settings);
     setCentralWidget(m_canvas);
@@ -62,9 +59,6 @@ void MainWindow::createMenus() {
     auto openBg = fileMenu->addAction("Otwórz tło...");
     connect(openBg, &QAction::triggered, this, &MainWindow::onOpenBackground);
     auto measMenu = menuBar()->addMenu("Pomiary");
-    // W menu pomiarów dodaj opcję otwierającą dialog ustawień pomiarów
-    auto measSettings = measMenu->addAction(QString::fromUtf8("Ustawienia..."));
-    connect(measSettings, &QAction::triggered, this, &MainWindow::onProjectSettings);
     auto report = measMenu->addAction("Raport...");
     connect(report, &QAction::triggered, this, &MainWindow::onReport);
     auto lin = measMenu->addAction("Pomiar liniowy");
@@ -108,46 +102,6 @@ void MainWindow::onMeasureAdvanced() {
     // panel można zamknąć przyciskiem Anuluj.
     showMeasurementControls(true);
 }
-void MainWindow::onProjectSettings() {
-    // Zapamiętaj aktualne wartości w ustawieniach przed ich modyfikacją
-    QColor oldColor   = m_settings.defaultMeasureColor;
-    double oldBuf     = m_settings.defaultBuffer;
-    int    oldLineW   = m_settings.lineWidthPx;
-    ProjectSettingsDialog dlg(this, &m_settings);
-    if (dlg.exec() == QDialog::Accepted) {
-        // Jeśli kolor został zmieniony i istnieją już pomiary, zapytaj o aktualizację
-        if (m_settings.defaultMeasureColor != oldColor && m_canvas->hasAnyMeasure()) {
-            if (QMessageBox::question(this,
-                                      QString::fromUtf8("Aktualizuj kolor pomiarów"),
-                                      QString::fromUtf8("Czy zastosować nowy kolor do wszystkich istniejących pomiarów?")) == QMessageBox::Yes) {
-                m_canvas->updateAllMeasureColors();
-            }
-        }
-        // Jeśli domyślny zapas został zmieniony i istnieją pomiary, zapytaj o aktualizację
-        if (std::abs(m_settings.defaultBuffer - oldBuf) > 1e-9 && m_canvas->hasAnyMeasure()) {
-            if (QMessageBox::question(this,
-                                      QString::fromUtf8("Aktualizuj domyślny zapas"),
-                                      QString::fromUtf8("Czy zastosować nowy domyślny zapas do wszystkich istniejących pomiarów?"))
-                == QMessageBox::Yes) {
-                // Aktualizujemy globalny zapas w każdym pomiarze.
-                m_canvas->updateAllMeasureGlobalBuffers();
-            }
-        }
-        // Jeśli grubość linii została zmieniona globalnie, zapytaj o aktualizację istniejących pomiarów
-        if (m_settings.lineWidthPx != oldLineW && m_canvas->hasAnyMeasure()) {
-            if (QMessageBox::question(this,
-                                      QString::fromUtf8("Aktualizuj grubość linii"),
-                                      QString::fromUtf8("Czy zastosować nową grubość linii do wszystkich istniejących pomiarów?"))
-                == QMessageBox::Yes) {
-                m_canvas->updateAllMeasureLineWidths();
-            }
-        }
-        // Uaktualnij rysunek oraz komunikat w pasku stanu
-        m_canvas->update();
-        statusBar()->showMessage(QString::fromUtf8("Zapisano ustawienia pomiarów"), 3000);
-    }
-}
-
 // --- Pomocnicza metoda ---
 // Ustawia panel dolny na tryb rysowania pomiarów. Pozwala wybrać kolor i grubość linii,
 // oraz potwierdzić/anulować/cofnąć/przywrócić rysowanie. Parametr withUndoRedo kontroluje

@@ -611,35 +611,6 @@ void CanvasWidget::setCurrentLineWidth(int w) {
     update();
 }
 
-/**
- * Aktualizuje globalny zapas wszystkich istniejących pomiarów.
- *
- * Wartość m_settings->defaultBuffer jest interpretowana w aktualnej
- * jednostce projektu (cm lub m) i konwertowana do metrów.  Następnie
- * każdemu zapisowi pomiaru przypisywana jest ta wartość w polu
- * Measure::bufferGlobalMeters.  Po aktualizacji przeliczana jest
- * całkowita długość z zapasami (length + bufferGlobal + bufferDefault + bufferFinal).
- */
-void CanvasWidget::updateAllMeasureGlobalBuffers() {
-    // Aktualizuj wartość globalnego zapasu w każdym pomiarze.  Domyślny
-    // zapas z ustawień jest interpretowany w bieżącej jednostce (cm lub m),
-    // a następnie zapisywany w polu bufferGlobalMeters każdego pomiaru.
-    double defBufM;
-    if (m_settings->defaultUnit == ProjectSettings::Unit::Cm) {
-        defBufM = m_settings->defaultBuffer / 100.0;
-    } else {
-        defBufM = m_settings->defaultBuffer;
-    }
-    for (auto &m : m_measures) {
-        // Ustaw globalny zapas dla pomiaru na nową wartość
-        m.bufferGlobalMeters = defBufM;
-        // Oblicz ponownie łączną długość z zapasami: zawiera
-        // długość, globalny zapas, zapas początkowy oraz zapas końcowy.
-        m.totalWithBufferMeters = m.lengthMeters + m.bufferGlobalMeters + m.bufferDefaultMeters + m.bufferFinalMeters;
-    }
-    update();
-}
-
 bool CanvasWidget::loadBackgroundFile(const QString& file) {
     QFileInfo fi(file);
     const QString ext = fi.suffix().toLower();
@@ -738,12 +709,10 @@ void CanvasWidget::startMeasureAdvanced(QWidget* parent) {
     m_advTemplate.type = MeasureType::Advanced;
     m_advTemplate.name = dlg.name();
     m_advTemplate.color = dlg.color();
-    // Jednostka pomiaru jest globalna, odczytujemy ją z ustawień projektu
-    m_advTemplate.unit  = (m_settings->defaultUnit == ProjectSettings::Unit::Cm) ? QStringLiteral("cm") : QStringLiteral("m");
-    // Domyślny zapas z dialogu jest podany w bieżącej jednostce; konwertujemy na metry
-    double defBuf = dlg.bufferValue();
-    if (m_settings->defaultUnit == ProjectSettings::Unit::Cm) defBuf /= 100.0;
-    m_advTemplate.bufferDefaultMeters = defBuf;
+    // Jednostka pomiaru jest stała (cm)
+    m_advTemplate.unit  = QStringLiteral("cm");
+    // Domyślny zapas z dialogu jest podany w cm
+    m_advTemplate.bufferDefaultMeters = dlg.bufferValue();
     // Inicjalizuj lokalny kolor i szerokość linii z wartości dialogu i globalnych ustawień.
     // Kolor pochodzi z dialogu zaawansowanego; grubość linii z ustawień globalnych.
     m_currentColor     = dlg.color();
@@ -1013,7 +982,7 @@ void CanvasWidget::drawOverlay(QPainter& p) {
             // existing segments
             for (size_t i=1;i<m_currentPts.size();++i) p.drawLine(m_currentPts[i-1], m_currentPts[i]);
             // live segment to mouse
-            double L = polyLengthMeters(m_currentPts);
+            double L = polyLengthCm(m_currentPts);
             if (m_hasMouseWorld) {
                 p.drawLine(m_currentPts.back(), m_mouseWorld);
                 double dx = m_mouseWorld.x() - m_currentPts.back().x();
@@ -1978,18 +1947,17 @@ void CanvasWidget::defineScalePromptAndApply(const QPointF& secondPoint) {
     if (distPx <= 0.0) return;
 
     bool ok=false;
-    double defaultVal = (m_settings->defaultUnit == ProjectSettings::Unit::Cm) ? 300.0 : 3.0;
+    double defaultVal = 300.0;
     // Użyj globalnej liczby miejsc po przecinku do podawania skali
     int decimals = m_settings->decimals;
-    double val = QInputDialog::getDouble(this, "Skalowanie", "Podaj wartość odległości:", defaultVal, 0.001, 100000.0, decimals, &ok);
+    double val = QInputDialog::getDouble(this, "Skalowanie", "Podaj wartość odległości [cm]:", defaultVal, 0.001, 100000.0, decimals, &ok);
     if (!ok) return;
-    double meters = (m_settings->defaultUnit == ProjectSettings::Unit::Cm) ? (val / 100.0) : val;
 
-    m_pixelsPerMeter = distPx / meters;
+    m_pixelsPerMeter = distPx / val;
     update();
 }
 
-double CanvasWidget::polyLengthMeters(const std::vector<QPointF>& pts) const {
+double CanvasWidget::polyLengthCm(const std::vector<QPointF>& pts) const {
     if (pts.size() < 2) return 0.0;
     double px=0.0;
     for (size_t i=1;i<pts.size();++i) {
@@ -2001,13 +1969,8 @@ double CanvasWidget::polyLengthMeters(const std::vector<QPointF>& pts) const {
 }
 
 QString CanvasWidget::fmtLenInProjectUnit(double m) const {
-    if (m_settings->defaultUnit == ProjectSettings::Unit::Cm) {
-        // Długość w centymetrach; użyj globalnej liczby miejsc po przecinku
-        return QString("%1 cm").arg(m*100.0, 0, 'f', m_settings->decimals);
-    } else {
-        // Długość w metrach; użyj również globalnej liczby miejsc po przecinku
-        return QString("%1 m").arg(m, 0, 'f', m_settings->decimals);
-    }
+    // Długość w centymetrach; użyj globalnej liczby miejsc po przecinku
+    return QString("%1 cm").arg(m, 0, 'f', m_settings->decimals);
 }
 
 void CanvasWidget::finishCurrentMeasure(QWidget* parentForAdvanced) {
@@ -2018,25 +1981,21 @@ void CanvasWidget::finishCurrentMeasure(QWidget* parentForAdvanced) {
     // set type & default unit/color
     if (m_mode == ToolMode::MeasureLinear) {
         mm.type = MeasureType::Linear;
-        mm.unit = (m_settings->defaultUnit==ProjectSettings::Unit::Cm) ? QStringLiteral("cm") : QStringLiteral("m");
+        mm.unit = QStringLiteral("cm");
         // Kolor i grubość linii pobieramy z lokalnych parametrów bieżącego pomiaru
         mm.color = m_currentColor;
         mm.lineWidthPx = m_currentLineWidth;
-        // Ustaw wartości zapasów: globalny z ustawień, początkowy i końcowy na 0
-        mm.bufferGlobalMeters  = (m_settings->defaultUnit == ProjectSettings::Unit::Cm)
-                                   ? (m_settings->defaultBuffer / 100.0)
-                                   : m_settings->defaultBuffer;
+        // Ustaw wartości zapasów: globalny 0, początkowy i końcowy na 0
+        mm.bufferGlobalMeters  = 0.0;
         mm.bufferDefaultMeters = 0.0;
         mm.bufferFinalMeters   = 0.0;
     } else if (m_mode == ToolMode::MeasurePolyline) {
         mm.type = MeasureType::Polyline;
-        mm.unit = (m_settings->defaultUnit==ProjectSettings::Unit::Cm) ? QStringLiteral("cm") : QStringLiteral("m");
+        mm.unit = QStringLiteral("cm");
         mm.color = m_currentColor;
         mm.lineWidthPx = m_currentLineWidth;
         // Ustaw zapas globalny; brak zapasów początkowych i końcowych
-        mm.bufferGlobalMeters  = (m_settings->defaultUnit == ProjectSettings::Unit::Cm)
-                                   ? (m_settings->defaultBuffer / 100.0)
-                                   : m_settings->defaultBuffer;
+        mm.bufferGlobalMeters  = 0.0;
         mm.bufferDefaultMeters = 0.0;
         mm.bufferFinalMeters   = 0.0;
     } else { // Advanced
@@ -2045,19 +2004,13 @@ void CanvasWidget::finishCurrentMeasure(QWidget* parentForAdvanced) {
         mm = m_advTemplate;
         mm.createdAt = QDateTime::currentDateTime();
         mm.pts = m_currentPts;
-        // Ustaw globalny zapas: jest on nadal pobierany z ustawień, a nie z szablonu
-        mm.bufferGlobalMeters = (m_settings->defaultUnit == ProjectSettings::Unit::Cm)
-                                  ? (m_settings->defaultBuffer / 100.0)
-                                  : m_settings->defaultBuffer;
+        // Ustaw globalny zapas: brak globalnego zapasu (wartość 0).
+        mm.bufferGlobalMeters = 0.0;
         if (mm.name.isEmpty()) { /* leave empty; will be set to default below */ }
-        // Zapas końcowy: dialog wykorzystuje globalną jednostkę,
-        // więc odczytujemy ją z ustawień projektu.
-        FinalBufferDialog fd(parentForAdvanced, m_settings->defaultUnit);
+        // Zapas końcowy w cm.
+        FinalBufferDialog fd(parentForAdvanced, m_settings);
         if (fd.exec() == QDialog::Accepted) {
             double val = fd.bufferValue();
-            // Wartość z dialogu jest w tej samej jednostce co ustawienie projektu
-            // (cm → val jest w cm; m → val jest w m). Konwertujemy na metry.
-            if (m_settings->defaultUnit == ProjectSettings::Unit::Cm) val /= 100.0;
             mm.bufferFinalMeters = val;
         } else {
             // Jeśli dialog został anulowany, ustaw zapas końcowy na 0
@@ -2069,7 +2022,7 @@ void CanvasWidget::finishCurrentMeasure(QWidget* parentForAdvanced) {
     // default name if empty: "Pomiar <id>"
     if (mm.name.isEmpty()) mm.name = QString("Pomiar %1").arg(mm.id);
     // compute lengths
-    mm.lengthMeters = polyLengthMeters(mm.pts);
+    mm.lengthMeters = polyLengthCm(mm.pts);
     // Całkowita długość z zapasami obejmuje długość, globalny zapas,
     // zapas początkowy oraz zapas końcowy.
     mm.totalWithBufferMeters = mm.lengthMeters + mm.bufferGlobalMeters + mm.bufferDefaultMeters + mm.bufferFinalMeters;
