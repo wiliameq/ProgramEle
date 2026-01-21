@@ -94,14 +94,19 @@ void MainWindow::onOpenBackground() {
     if (fn.isEmpty()) {
         return;
     }
-    if (!m_canvas->loadBackgroundFile(fn)) {
+    QImage image;
+    if (!m_canvas->loadBackgroundImage(fn, image)) {
         QMessageBox::warning(this,
                              QString::fromUtf8("Błąd wczytania tła"),
                              QString::fromUtf8("Nie udało się wczytać wybranego pliku tła."));
         return;
     }
     floor->backgroundPath = fn;
+    floor->backgroundImage = image;
+    floor->backgroundLoaded = true;
     floor->backgroundVisible = true;
+    m_canvas->setBackgroundImage(image);
+    m_canvas->setBackgroundVisible(true);
     updateBackgroundControls();
 }
 void MainWindow::onToggleBackground() {
@@ -393,9 +398,9 @@ void MainWindow::buildProjectPanel() {
     m_backgroundToggle = new QToolButton(m_projectControls);
     m_backgroundToggle->setText(QString::fromUtf8("Tło"));
     m_backgroundToggle->setToolButtonStyle(Qt::ToolButtonTextBesideIcon);
-    m_backgroundToggle->setArrowType(Qt::DownArrow);
+    m_backgroundToggle->setArrowType(Qt::RightArrow);
     m_backgroundToggle->setCheckable(true);
-    m_backgroundToggle->setChecked(true);
+    m_backgroundToggle->setChecked(false);
     m_backgroundToggle->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Preferred);
     controlsLayout->addWidget(m_backgroundToggle);
 
@@ -410,6 +415,7 @@ void MainWindow::buildProjectPanel() {
     backgroundLayout->addWidget(m_toggleBackgroundBtn);
     backgroundLayout->addWidget(m_scaleBackgroundBtn);
     controlsLayout->addWidget(m_backgroundPanel);
+    m_backgroundPanel->setVisible(false);
 
     layout->addWidget(m_projectControls);
     layout->addStretch(1);
@@ -586,12 +592,25 @@ void MainWindow::applyBackgroundForSelection() {
     }
     if (floor->backgroundPath.isEmpty()) {
         m_canvas->clearBackground();
-    } else if (!m_canvas->loadBackgroundFile(floor->backgroundPath)) {
+    } else {
         auto* editableFloor = currentFloorData();
         if (editableFloor) {
-            editableFloor->backgroundPath.clear();
+            if (!editableFloor->backgroundLoaded) {
+                QImage image;
+                if (!m_canvas->loadBackgroundImage(editableFloor->backgroundPath, image)) {
+                    editableFloor->backgroundPath.clear();
+                    editableFloor->backgroundLoaded = false;
+                    editableFloor->backgroundImage = QImage();
+                    m_canvas->clearBackground();
+                } else {
+                    editableFloor->backgroundImage = image;
+                    editableFloor->backgroundLoaded = true;
+                    m_canvas->setBackgroundImage(image);
+                }
+            } else {
+                m_canvas->setBackgroundImage(editableFloor->backgroundImage);
+            }
         }
-        m_canvas->clearBackground();
     }
     m_canvas->setBackgroundVisible(floor->backgroundVisible);
     updateBackgroundControls();

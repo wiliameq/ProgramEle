@@ -1,6 +1,7 @@
 #pragma once
 #include <QMainWindow>
 #include <QVector>
+#include <QImage>
 #include "Settings.h"
 class CanvasWidget;
 class QDockWidget;
@@ -36,6 +37,8 @@ private:
     struct FloorData {
         QString name;
         QString backgroundPath;
+        QImage backgroundImage;
+        bool backgroundLoaded = false;
         bool backgroundVisible = true;
     };
     struct Building {
