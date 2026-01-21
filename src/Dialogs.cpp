@@ -40,6 +40,54 @@
 #include <QTextDocument>
 #include <QRegularExpression>
 
+// -------- NewProjectDialog --------
+NewProjectDialog::NewProjectDialog(QWidget* parent)
+    : QDialog(parent) {
+    setWindowTitle(QString::fromUtf8("Nowy projekt"));
+    auto lay = new QVBoxLayout(this);
+    auto form = new QFormLayout();
+
+    m_name = new QLineEdit(this);
+    m_name->setPlaceholderText(QString::fromUtf8("Nazwa projektu"));
+    m_address = new QLineEdit(this);
+    m_address->setPlaceholderText(QString::fromUtf8("Adres"));
+    m_investor = new QLineEdit(this);
+    m_investor->setPlaceholderText(QString::fromUtf8("Dane inwestora"));
+
+    form->addRow(QString::fromUtf8("Nazwa:"), m_name);
+    form->addRow(QString::fromUtf8("Adres:"), m_address);
+    form->addRow(QString::fromUtf8("Inwestor:"), m_investor);
+    lay->addLayout(form);
+
+    m_buttons = new QDialogButtonBox(QDialogButtonBox::Ok | QDialogButtonBox::Cancel, this);
+    lay->addWidget(m_buttons);
+    updateOkState();
+
+    QObject::connect(m_name, &QLineEdit::textChanged, this, [this](){ updateOkState(); });
+    QObject::connect(m_buttons, &QDialogButtonBox::accepted, this, &QDialog::accept);
+    QObject::connect(m_buttons, &QDialogButtonBox::rejected, this, &QDialog::reject);
+}
+
+QString NewProjectDialog::projectName() const {
+    return m_name ? m_name->text().trimmed() : QString();
+}
+
+QString NewProjectDialog::projectAddress() const {
+    return m_address ? m_address->text().trimmed() : QString();
+}
+
+QString NewProjectDialog::investorName() const {
+    return m_investor ? m_investor->text().trimmed() : QString();
+}
+
+void NewProjectDialog::updateOkState() {
+    if (!m_buttons) {
+        return;
+    }
+    bool hasName = m_name && !m_name->text().trimmed().isEmpty();
+    m_buttons->button(QDialogButtonBox::Ok)->setEnabled(hasName);
+}
+
 // -------- AdvancedMeasureDialog --------
 AdvancedMeasureDialog::AdvancedMeasureDialog(QWidget* parent, ProjectSettings* settings)
     : QDialog(parent), m_settings(settings) {
