@@ -8,15 +8,13 @@
 #include <QDockWidget>
 // Dodane nagłówki do widżetów używanych w panelu ustawień pomiarów.
 // Bez tych include'ów kompilator MSVC nie zna klas takich jak
-// QHBoxLayout, QLabel, QPushButton, QSpinBox, QColorDialog czy QMessageBox,
+// QHBoxLayout, QLabel, QPushButton, QSpinBox czy QColorDialog,
 // co prowadziło do błędów kompilacji.
 #include <QHBoxLayout>
 #include <QLabel>
 #include <QPushButton>
 #include <QSpinBox>
 #include <QColorDialog>
-#include <QMessageBox>
-#include <QInputDialog>
 MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent) {
     m_canvas = new CanvasWidget(this, &m_settings);
     setCentralWidget(m_canvas);
@@ -151,60 +149,6 @@ void MainWindow::showMeasurementControls(bool withUndoRedo) {
     });
 
     lay->addStretch();
-
-    // --- Globalne ustawienia koloru i grubości linii ---
-    // Dodaj przyciski pozwalające na zmianę koloru i grubości linii
-    // dla wszystkich pomiarów (ustawienie domyślne).  Po wyborze nowej
-    // wartości użytkownik jest pytany o aktualizację istniejących pomiarów.
-    auto globalColorBtn = new QPushButton(QString::fromUtf8("Zmień kolor linii globalnie"), panel);
-    lay->addWidget(globalColorBtn);
-    connect(globalColorBtn, &QPushButton::clicked, this, [this, updateColorBtn, colorBtn]() {
-        // Wybierz nowy kolor domyślny
-        QColor chosen = QColorDialog::getColor(m_settings.defaultMeasureColor, this, QString::fromUtf8("Wybierz domyślny kolor linii"));
-        if (!chosen.isValid()) return;
-        if (chosen == m_settings.defaultMeasureColor) return;
-        m_settings.defaultMeasureColor = chosen;
-        // Zapytaj o aktualizację istniejących pomiarów
-        if (m_canvas->hasAnyMeasure()) {
-            if (QMessageBox::question(this,
-                                      QString::fromUtf8("Aktualizuj kolor pomiarów"),
-                                      QString::fromUtf8("Czy zastosować nowy domyślny kolor do wszystkich istniejących pomiarów?"))
-                == QMessageBox::Yes) {
-                m_canvas->updateAllMeasureColors();
-            }
-        }
-        // Aktualizuj przycisk w panelu i ewentualnie bieżący pomiar
-        updateColorBtn();
-        // Zmień także kolor bieżącego pomiaru, aby odzwierciedlić nową wartość
-        m_canvas->setCurrentColor(chosen);
-    });
-
-    auto globalLwBtn = new QPushButton(QString::fromUtf8("Zmień grubość linii globalnie"), panel);
-    lay->addWidget(globalLwBtn);
-    connect(globalLwBtn, &QPushButton::clicked, this, [this, lwSpin]() {
-        bool ok = false;
-        int v = QInputDialog::getInt(this,
-                                     QString::fromUtf8("Nowa domyślna grubość linii"),
-                                     QString::fromUtf8("Grubość (1–8):"),
-                                     m_settings.lineWidthPx,
-                                     1, 8, 1,
-                                     &ok);
-        if (!ok) return;
-        if (v == m_settings.lineWidthPx) return;
-        m_settings.lineWidthPx = v;
-        if (m_canvas->hasAnyMeasure()) {
-            if (QMessageBox::question(this,
-                                      QString::fromUtf8("Aktualizuj grubość linii"),
-                                      QString::fromUtf8("Czy zastosować nową domyślną grubość do wszystkich istniejących pomiarów?"))
-                == QMessageBox::Yes) {
-                m_canvas->updateAllMeasureLineWidths();
-            }
-        }
-        // Ustaw grubość dla bieżącego pomiaru
-        m_canvas->setCurrentLineWidth(v);
-        // Zaktualizuj spinbox
-        lwSpin->setValue(v);
-    });
 
     // --- Przyciski cofnięcia / przywrócenia ---
     if (withUndoRedo) {
