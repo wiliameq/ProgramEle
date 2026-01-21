@@ -42,7 +42,7 @@ private:
     void createMenus();
     void setProjectActive(bool active);
     void buildProjectPanel();
-    void refreshProjectPanel();
+    void refreshProjectPanel(int preferredBuildingIndex = -1, int preferredFloorIndex = -1);
     QString createProjectTempFile(const QString& projectName,
                                   const QString& address,
                                   const QString& investor);

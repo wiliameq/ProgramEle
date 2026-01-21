@@ -26,6 +26,7 @@
 #include <QMessageBox>
 #include <QRegularExpression>
 #include <QInputDialog>
+#include <algorithm>
 MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent) {
     m_canvas = new CanvasWidget(this, &m_settings);
     setCentralWidget(m_canvas);
@@ -143,8 +144,8 @@ void MainWindow::onAddBuilding() {
     building.name = nextBuildingName();
     building.floors.append(nextFloorName(building));
     m_buildings.push_back(building);
-    refreshProjectPanel();
-    m_buildingCombo->setCurrentIndex(m_buildings.size() - 1);
+    int buildingIndex = m_buildings.size() - 1;
+    refreshProjectPanel(buildingIndex, 0);
     writeProjectTempFile();
 }
 
@@ -157,7 +158,8 @@ void MainWindow::onRemoveBuilding() {
         return;
     }
     m_buildings.removeAt(index);
-    refreshProjectPanel();
+    int nextIndex = std::min(index, m_buildings.size() - 1);
+    refreshProjectPanel(nextIndex, 0);
     writeProjectTempFile();
 }
 
@@ -193,8 +195,8 @@ void MainWindow::onAddFloor() {
     }
     auto& building = m_buildings[index];
     building.floors.append(nextFloorName(building));
-    refreshProjectPanel();
-    m_floorCombo->setCurrentIndex(building.floors.size() - 1);
+    int floorIndex = building.floors.size() - 1;
+    refreshProjectPanel(index, floorIndex);
     writeProjectTempFile();
 }
 
@@ -212,7 +214,8 @@ void MainWindow::onRemoveFloor() {
         return;
     }
     building.floors.removeAt(floorIndex);
-    refreshProjectPanel();
+    int nextFloorIndex = std::min(floorIndex, building.floors.size() - 1);
+    refreshProjectPanel(index, nextFloorIndex);
     writeProjectTempFile();
 }
 
@@ -374,10 +377,12 @@ void MainWindow::buildProjectPanel() {
     m_rightDock->setWidget(panel);
 }
 
-void MainWindow::refreshProjectPanel() {
+void MainWindow::refreshProjectPanel(int preferredBuildingIndex, int preferredFloorIndex) {
     if (!m_projectActive || !m_buildingCombo || !m_floorCombo) {
         return;
     }
+    int currentBuildingIndex = m_buildingCombo->currentIndex();
+    int currentFloorIndex = m_floorCombo->currentIndex();
     m_buildingCombo->blockSignals(true);
     m_buildingCombo->clear();
     for (const auto& building : m_buildings) {
@@ -385,15 +390,31 @@ void MainWindow::refreshProjectPanel() {
     }
     m_buildingCombo->blockSignals(false);
 
-    int buildingIndex = m_buildingCombo->currentIndex();
-    if (buildingIndex < 0 && !m_buildings.isEmpty()) {
-        buildingIndex = 0;
-        m_buildingCombo->setCurrentIndex(0);
+    int buildingIndex = preferredBuildingIndex >= 0 ? preferredBuildingIndex : currentBuildingIndex;
+    if (!m_buildings.isEmpty()) {
+        if (buildingIndex < 0) {
+            buildingIndex = 0;
+        } else if (buildingIndex >= m_buildings.size()) {
+            buildingIndex = m_buildings.size() - 1;
+        }
+    }
+    if (buildingIndex >= 0 && buildingIndex < m_buildings.size()) {
+        m_buildingCombo->setCurrentIndex(buildingIndex);
     }
     if (buildingIndex >= 0 && buildingIndex < m_buildings.size()) {
         m_floorCombo->clear();
         m_floorCombo->addItems(m_buildings[buildingIndex].floors);
-        m_floorCombo->setCurrentIndex(0);
+        int floorIndex = preferredFloorIndex >= 0 ? preferredFloorIndex : currentFloorIndex;
+        if (!m_buildings[buildingIndex].floors.isEmpty()) {
+            if (floorIndex < 0) {
+                floorIndex = 0;
+            } else if (floorIndex >= m_buildings[buildingIndex].floors.size()) {
+                floorIndex = m_buildings[buildingIndex].floors.size() - 1;
+            }
+        }
+        if (floorIndex >= 0 && floorIndex < m_buildings[buildingIndex].floors.size()) {
+            m_floorCombo->setCurrentIndex(floorIndex);
+        }
         if (m_removeFloorBtn) {
             m_removeFloorBtn->setEnabled(m_buildings[buildingIndex].floors.size() > 1);
         }
