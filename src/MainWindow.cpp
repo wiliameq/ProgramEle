@@ -20,6 +20,9 @@
 #include <QComboBox>
 #include <QToolButton>
 #include <QStackedWidget>
+#include <QDialog>
+#include <QDialogButtonBox>
+#include <QTreeWidget>
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
@@ -403,9 +406,11 @@ void MainWindow::buildProjectPanel() {
     m_insertBackgroundBtn = new QPushButton(QString::fromUtf8("Wstaw tło"), m_backgroundPanel);
     m_toggleBackgroundBtn = new QPushButton(QString::fromUtf8("Ukryj/Pokaż tło"), m_backgroundPanel);
     m_scaleBackgroundBtn = new QPushButton(QString::fromUtf8("Wyskaluj tło"), m_backgroundPanel);
+    m_applyBackgroundBtn = new QPushButton(QString::fromUtf8("Zastosuj do..."), m_backgroundPanel);
     backgroundLayout->addWidget(m_insertBackgroundBtn);
     backgroundLayout->addWidget(m_toggleBackgroundBtn);
     backgroundLayout->addWidget(m_scaleBackgroundBtn);
+    backgroundLayout->addWidget(m_applyBackgroundBtn);
     controlsLayout->addWidget(m_backgroundPanel);
     m_backgroundPanel->setVisible(false);
 
@@ -432,6 +437,7 @@ void MainWindow::buildProjectPanel() {
     connect(m_insertBackgroundBtn, &QPushButton::clicked, this, &MainWindow::onOpenBackground);
     connect(m_toggleBackgroundBtn, &QPushButton::clicked, this, &MainWindow::onToggleBackground);
     connect(m_scaleBackgroundBtn, &QPushButton::clicked, this, &MainWindow::onSetScale);
+    connect(m_applyBackgroundBtn, &QPushButton::clicked, this, &MainWindow::onApplyBackgroundTo);
 
     m_rightDock->setWidget(panel);
     updateBackgroundControls();
@@ -596,6 +602,9 @@ void MainWindow::updateBackgroundControls() {
     if (m_scaleBackgroundBtn) {
         m_scaleBackgroundBtn->setEnabled(hasBackground);
     }
+    if (m_applyBackgroundBtn) {
+        m_applyBackgroundBtn->setEnabled(hasBackground && hasOtherFloors());
+    }
 }
 
 void MainWindow::ensureFloorCanvas(FloorData& floor) {
@@ -619,6 +628,89 @@ void MainWindow::removeFloorCanvas(FloorData& floor) {
     m_canvasStack->removeWidget(floor.canvas);
     floor.canvas->deleteLater();
     floor.canvas = nullptr;
+}
+
+bool MainWindow::hasOtherFloors() const {
+    int totalFloors = 0;
+    for (const auto& building : m_buildings) {
+        totalFloors += building.floors.size();
+        if (totalFloors > 1) {
+            return true;
+        }
+    }
+    return false;
+}
+
+void MainWindow::onApplyBackgroundTo() {
+    if (!m_canvas || !m_canvas->hasBackground()) {
+        return;
+    }
+    QDialog dialog(this);
+    dialog.setWindowTitle(QString::fromUtf8("Zastosuj tło do"));
+    auto* layout = new QVBoxLayout(&dialog);
+
+    auto* tree = new QTreeWidget(&dialog);
+    tree->setHeaderLabels({QString::fromUtf8("Budynek / Piętro")});
+    tree->setSelectionMode(QAbstractItemView::NoSelection);
+    tree->setUniformRowHeights(true);
+
+    for (int b = 0; b < m_buildings.size(); ++b) {
+        const auto& building = m_buildings[b];
+        auto* buildingItem = new QTreeWidgetItem(tree);
+        buildingItem->setText(0, building.name);
+        buildingItem->setFlags(buildingItem->flags() & ~Qt::ItemIsSelectable);
+        for (int f = 0; f < building.floors.size(); ++f) {
+            const auto& floor = building.floors[f];
+            auto* floorItem = new QTreeWidgetItem(buildingItem);
+            floorItem->setText(0, floor.name);
+            floorItem->setCheckState(0, Qt::Unchecked);
+            floorItem->setData(0, Qt::UserRole, b);
+            floorItem->setData(0, Qt::UserRole + 1, f);
+        }
+        buildingItem->setExpanded(true);
+    }
+
+    layout->addWidget(tree);
+
+    auto* buttons = new QDialogButtonBox(QDialogButtonBox::Ok | QDialogButtonBox::Cancel, &dialog);
+    layout->addWidget(buttons);
+    connect(buttons, &QDialogButtonBox::accepted, &dialog, &QDialog::accept);
+    connect(buttons, &QDialogButtonBox::rejected, &dialog, &QDialog::reject);
+
+    if (dialog.exec() != QDialog::Accepted) {
+        return;
+    }
+
+    const QImage background = m_canvas->backgroundImage();
+    if (background.isNull()) {
+        return;
+    }
+
+    for (int i = 0; i < tree->topLevelItemCount(); ++i) {
+        auto* buildingItem = tree->topLevelItem(i);
+        for (int j = 0; j < buildingItem->childCount(); ++j) {
+            auto* floorItem = buildingItem->child(j);
+            if (floorItem->checkState(0) != Qt::Checked) {
+                continue;
+            }
+            int buildingIndex = floorItem->data(0, Qt::UserRole).toInt();
+            int floorIndex = floorItem->data(0, Qt::UserRole + 1).toInt();
+            if (buildingIndex < 0 || buildingIndex >= m_buildings.size()) {
+                continue;
+            }
+            auto& building = m_buildings[buildingIndex];
+            if (floorIndex < 0 || floorIndex >= building.floors.size()) {
+                continue;
+            }
+            auto& floor = building.floors[floorIndex];
+            ensureFloorCanvas(floor);
+            if (floor.canvas) {
+                floor.canvas->setBackgroundImage(background);
+                floor.canvas->setBackgroundVisible(true);
+            }
+        }
+    }
+    updateBackgroundControls();
 }
 
 // --- Pomocnicza metoda ---

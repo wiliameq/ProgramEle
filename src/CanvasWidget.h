@@ -103,6 +103,7 @@ public:
     bool isBackgroundVisible() const;
     void clearBackground();
     void setBackgroundImage(const QImage& image);
+    const QImage& backgroundImage() const;
 
     // View & layers
     void startScaleDefinition(double);

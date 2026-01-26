@@ -653,6 +653,8 @@ void CanvasWidget::setBackgroundImage(const QImage& image) {
     m_bgImage = image;
     update();
 }
+
+const QImage& CanvasWidget::backgroundImage() const { return m_bgImage; }
 void CanvasWidget::toggleMeasuresVisibility() {
     m_showMeasures = !m_showMeasures;
     m_measurementsTool.setVisible(m_showMeasures);
