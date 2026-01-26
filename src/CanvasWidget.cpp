@@ -1958,9 +1958,45 @@ void CanvasWidget::applyScaleFromPoints(QWidget* parent) {
         return;
     }
 
+    double oldPixelsPerMeter = m_pixelsPerMeter;
     m_pixelsPerMeter = distPx / val;
-    m_measurementsTool.recalculateLengths();
+    if (oldPixelsPerMeter > 0.0) {
+        double factor = m_pixelsPerMeter / oldPixelsPerMeter;
+        scaleCanvasContents(factor);
+    } else {
+        m_measurementsTool.recalculateLengths();
+    }
     update();
+}
+
+void CanvasWidget::scaleCanvasContents(double factor) {
+    if (factor == 1.0) {
+        return;
+    }
+    m_measurementsTool.scaleAllPoints(factor);
+    for (auto &txt : m_textItems) {
+        txt.pos.setX(txt.pos.x() * factor);
+        txt.pos.setY(txt.pos.y() * factor);
+        QPointF topLeft = txt.boundingRect.topLeft() * factor;
+        QPointF bottomRight = txt.boundingRect.bottomRight() * factor;
+        txt.boundingRect = QRectF(topLeft, bottomRight).normalized();
+    }
+    if (m_hasTempTextItem) {
+        m_tempTextItem.pos.setX(m_tempTextItem.pos.x() * factor);
+        m_tempTextItem.pos.setY(m_tempTextItem.pos.y() * factor);
+        QPointF topLeft = m_tempTextItem.boundingRect.topLeft() * factor;
+        QPointF bottomRight = m_tempTextItem.boundingRect.bottomRight() * factor;
+        m_tempTextItem.boundingRect = QRectF(topLeft, bottomRight).normalized();
+        repositionTempTextEdit();
+    }
+    if (m_textEdit && m_editingTextIndex >= 0 && m_editingTextIndex < (int)m_textItems.size()) {
+        QPointF tl = toScreen(m_textItems[m_editingTextIndex].boundingRect.topLeft());
+        QSizeF sizePx(m_textItems[m_editingTextIndex].boundingRect.width() * m_pixelsPerMeter * m_zoom,
+                      m_textItems[m_editingTextIndex].boundingRect.height() * m_pixelsPerMeter * m_zoom);
+        m_textEdit->move(tl.toPoint());
+        m_textEdit->resize(std::max(40, (int)std::round(sizePx.width())),
+                           std::max(20, (int)std::round(sizePx.height())));
+    }
 }
 
 void CanvasWidget::openReportDialog(QWidget* parent)

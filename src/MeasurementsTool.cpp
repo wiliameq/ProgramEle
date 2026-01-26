@@ -328,6 +328,31 @@ void MeasurementsTool::recalculateLengths() {
     }
 }
 
+void MeasurementsTool::scaleAllPoints(double factor) {
+    if (factor == 1.0) {
+        return;
+    }
+    for (auto &m : m_measures) {
+        for (auto &pt : m.pts) {
+            pt.setX(pt.x() * factor);
+            pt.setY(pt.y() * factor);
+        }
+    }
+    for (auto &pt : m_currentPts) {
+        pt.setX(pt.x() * factor);
+        pt.setY(pt.y() * factor);
+    }
+    for (auto &pt : m_redoPts) {
+        pt.setX(pt.x() * factor);
+        pt.setY(pt.y() * factor);
+    }
+    for (auto &pt : m_advTemplate.pts) {
+        pt.setX(pt.x() * factor);
+        pt.setY(pt.y() * factor);
+    }
+    recalculateLengths();
+}
+
 QColor MeasurementsTool::selectedMeasureColor() const {
     if (m_selectedMeasureIndex >= 0 && m_selectedMeasureIndex < (int)m_measures.size()) {
         return m_measures[m_selectedMeasureIndex].color;

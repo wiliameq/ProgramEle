@@ -138,6 +138,7 @@ private:
     void commitActiveTextEdit();
     void applyScaleFromPoints(QWidget* parent);
     void emitScaleStateChanged();
+    void scaleCanvasContents(double factor);
     // Settings
     ProjectSettings* m_settings = nullptr;
 
