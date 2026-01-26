@@ -1959,6 +1959,7 @@ void CanvasWidget::applyScaleFromPoints(QWidget* parent) {
     }
 
     m_pixelsPerMeter = distPx / val;
+    m_measurementsTool.recalculateLengths();
     update();
 }
 
