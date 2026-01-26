@@ -1,7 +1,6 @@
 #pragma once
 #include <QMainWindow>
 #include <QVector>
-#include <QStringList>
 #include "Settings.h"
 class CanvasWidget;
 class QDockWidget;
@@ -9,6 +8,8 @@ class QAction;
 class QLabel;
 class QComboBox;
 class QPushButton;
+class QToolButton;
+class QStackedWidget;
 class MainWindow : public QMainWindow {
     Q_OBJECT
 public:
@@ -31,10 +32,16 @@ private slots:
     void onRemoveFloor();
     void onRenameFloor();
     void onBuildingChanged(int index);
+    void onFloorChanged(int index);
+    void onApplyBackgroundTo();
 private:
+    struct FloorData {
+        QString name;
+        CanvasWidget* canvas = nullptr;
+    };
     struct Building {
         QString name;
-        QStringList floors;
+        QVector<FloorData> floors;
     };
 
     CanvasWidget* m_canvas = nullptr;
@@ -49,6 +56,13 @@ private:
     void writeProjectTempFile();
     QString nextBuildingName() const;
     QString nextFloorName(const Building& building) const;
+    FloorData* currentFloorData();
+    const FloorData* currentFloorData() const;
+    void applyCanvasForSelection();
+    void updateBackgroundControls();
+    void ensureFloorCanvas(FloorData& floor);
+    void removeFloorCanvas(FloorData& floor);
+    bool hasOtherFloors() const;
 
     /**
      * Wyświetla w dolnym panelu (ToolSettingsWidget) kontrolki związane z rysowaniem pomiarów.
@@ -64,20 +78,25 @@ private:
     class QDockWidget* m_rightDock = nullptr;
     // Panel dolny z ustawieniami aktualnego narzędzia
     class ToolSettingsWidget* m_settingsDock = nullptr;
+    QStackedWidget* m_canvasStack = nullptr;
 
     QAction* m_newProjectAction = nullptr;
-    QAction* m_openBackgroundAction = nullptr;
     QAction* m_reportAction = nullptr;
     QAction* m_measureLinearAction = nullptr;
     QAction* m_measurePolylineAction = nullptr;
     QAction* m_measureAdvancedAction = nullptr;
-    QAction* m_toggleBackgroundAction = nullptr;
     QAction* m_toggleMeasuresLayerAction = nullptr;
 
     QLabel* m_projectNameLabel = nullptr;
     QWidget* m_projectControls = nullptr;
     QComboBox* m_buildingCombo = nullptr;
     QComboBox* m_floorCombo = nullptr;
+    QWidget* m_backgroundPanel = nullptr;
+    QToolButton* m_backgroundToggle = nullptr;
+    QPushButton* m_insertBackgroundBtn = nullptr;
+    QPushButton* m_toggleBackgroundBtn = nullptr;
+    QPushButton* m_scaleBackgroundBtn = nullptr;
+    QPushButton* m_applyBackgroundBtn = nullptr;
     QPushButton* m_removeBuildingBtn = nullptr;
     QPushButton* m_renameBuildingBtn = nullptr;
     QPushButton* m_removeFloorBtn = nullptr;
