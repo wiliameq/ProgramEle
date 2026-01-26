@@ -48,6 +48,8 @@ public:
     bool hasAnyMeasure() const;
     void updateAllMeasureColors(const QColor& color);
     void updateAllMeasureLineWidths(int width);
+    void recalculateLengths();
+    void scaleAllPoints(double factor);
 
     QColor selectedMeasureColor() const;
     int selectedMeasureLineWidth() const;
