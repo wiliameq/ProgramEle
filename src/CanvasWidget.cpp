@@ -1973,6 +1973,8 @@ void CanvasWidget::scaleCanvasContents(double factor) {
     if (factor == 1.0) {
         return;
     }
+    QPointF screenCenter(width() / 2.0, height() / 2.0);
+    QPointF worldCenter = toWorld(screenCenter);
     m_measurementsTool.scaleAllPoints(factor);
     for (auto &txt : m_textItems) {
         txt.pos.setX(txt.pos.x() * factor);
@@ -1997,6 +1999,7 @@ void CanvasWidget::scaleCanvasContents(double factor) {
         m_textEdit->resize(std::max(40, (int)std::round(sizePx.width())),
                            std::max(20, (int)std::round(sizePx.height())));
     }
+    m_viewOffset = screenCenter - (worldCenter * factor) * m_zoom;
 }
 
 void CanvasWidget::openReportDialog(QWidget* parent)
