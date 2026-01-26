@@ -661,10 +661,69 @@ void CanvasWidget::toggleMeasuresVisibility() {
     update();
 }
 void CanvasWidget::startScaleDefinition(double) {
-    m_hasFirst = false;
+    m_scaleStep = ScaleStep::FirstPending;
+    m_scaleHasFirst = false;
+    m_scaleHasSecond = false;
+    m_scaleDragPoint = 0;
     m_mode = ToolMode::DefineScale;
     m_measurementsTool.deactivate();
     m_activeTool = nullptr;
+    emitScaleStateChanged();
+}
+
+void CanvasWidget::confirmScaleStep(QWidget* parent) {
+    if (m_mode != ToolMode::DefineScale) {
+        return;
+    }
+    if (m_scaleStep == ScaleStep::FirstPending && m_scaleHasFirst) {
+        m_scaleStep = ScaleStep::SecondPending;
+        emitScaleStateChanged();
+        update();
+        return;
+    }
+    if (m_scaleStep == ScaleStep::SecondPending && m_scaleHasSecond) {
+        m_scaleStep = ScaleStep::Adjusting;
+        emitScaleStateChanged();
+        update();
+        return;
+    }
+    if (m_scaleStep == ScaleStep::Adjusting) {
+        applyScaleFromPoints(parent);
+        m_mode = ToolMode::None;
+        m_scaleStep = ScaleStep::None;
+        m_scaleHasFirst = false;
+        m_scaleHasSecond = false;
+        m_scaleDragPoint = 0;
+        emitScaleStateChanged();
+        emit scaleFinished();
+        update();
+    }
+}
+
+void CanvasWidget::removeScalePoint() {
+    if (m_mode != ToolMode::DefineScale) {
+        return;
+    }
+    if (m_scaleHasSecond) {
+        m_scaleHasSecond = false;
+        m_scaleStep = ScaleStep::SecondPending;
+    } else if (m_scaleHasFirst) {
+        m_scaleHasFirst = false;
+        m_scaleStep = ScaleStep::FirstPending;
+    }
+    m_scaleDragPoint = 0;
+    emitScaleStateChanged();
+    update();
+}
+
+bool CanvasWidget::scaleHasFirstPoint() const { return m_scaleHasFirst; }
+
+bool CanvasWidget::scaleHasSecondPoint() const { return m_scaleHasSecond; }
+
+int CanvasWidget::scaleStep() const { return static_cast<int>(m_scaleStep); }
+
+void CanvasWidget::emitScaleStateChanged() {
+    emit scaleStateChanged(static_cast<int>(m_scaleStep), m_scaleHasFirst, m_scaleHasSecond);
 }
 
 void CanvasWidget::startMeasureLinear() {
@@ -897,6 +956,30 @@ void CanvasWidget::drawTextItems(QPainter& p) {
 
 void CanvasWidget::drawOverlay(QPainter& p) {
     m_measurementsTool.drawOverlay(p, m_hasMouseWorld, m_mouseWorld);
+    if (m_mode == ToolMode::DefineScale) {
+        QPen linePen(QColor(30, 144, 255));
+        linePen.setWidthF(2.0);
+        linePen.setCosmetic(true);
+        QPen pointPen(Qt::black);
+        pointPen.setWidthF(1.2);
+        pointPen.setCosmetic(true);
+        QBrush pointBrush(Qt::white);
+        if (m_scaleHasFirst) {
+            p.setPen(pointPen);
+            p.setBrush(pointBrush);
+            p.drawEllipse(m_scaleFirstPoint, 5.0 / m_zoom, 5.0 / m_zoom);
+        }
+        if (m_scaleHasSecond) {
+            p.setPen(pointPen);
+            p.setBrush(pointBrush);
+            p.drawEllipse(m_scaleSecondPoint, 5.0 / m_zoom, 5.0 / m_zoom);
+        }
+        if (m_scaleStep == ScaleStep::Adjusting && m_scaleHasFirst && m_scaleHasSecond) {
+            p.setPen(linePen);
+            p.setBrush(Qt::NoBrush);
+            p.drawLine(m_scaleFirstPoint, m_scaleSecondPoint);
+        }
+    }
 }
 
 void CanvasWidget::mousePressEvent(QMouseEvent* ev) {
@@ -922,8 +1005,34 @@ void CanvasWidget::mousePressEvent(QMouseEvent* ev) {
     }
     QPointF pos = toWorld(ev->position());
     if (m_mode == ToolMode::DefineScale) {
-        if (!m_hasFirst) { m_firstPoint = pos; m_hasFirst = true; }
-        else { defineScalePromptAndApply(pos); m_hasFirst = false; m_mode = ToolMode::None; }
+        if (ev->button() != Qt::LeftButton) {
+            return;
+        }
+        auto screenPos = ev->position();
+        auto hitPoint = [this, screenPos](const QPointF& pt) {
+            QPointF screen = toScreen(pt);
+            const double dx = screen.x() - screenPos.x();
+            const double dy = screen.y() - screenPos.y();
+            return std::hypot(dx, dy) <= 8.0;
+        };
+        if (m_scaleHasFirst && hitPoint(m_scaleFirstPoint)) {
+            m_scaleDragPoint = 1;
+            return;
+        }
+        if (m_scaleHasSecond && hitPoint(m_scaleSecondPoint)) {
+            m_scaleDragPoint = 2;
+            return;
+        }
+        if (m_scaleStep == ScaleStep::FirstPending) {
+            m_scaleFirstPoint = pos;
+            m_scaleHasFirst = true;
+            emitScaleStateChanged();
+        } else if (m_scaleStep == ScaleStep::SecondPending) {
+            m_scaleSecondPoint = pos;
+            m_scaleHasSecond = true;
+            emitScaleStateChanged();
+        }
+        update();
         return;
     }
     if (m_activeTool && m_activeTool->mousePress(ev)) {
@@ -1229,6 +1338,32 @@ void CanvasWidget::mouseMoveEvent(QMouseEvent* ev) {
         update();
         return;
     }
+    if (m_mode == ToolMode::DefineScale && m_scaleDragPoint != 0) {
+        QPointF wpos = toWorld(ev->position());
+        if (m_scaleDragPoint == 1) {
+            if (m_scaleHasSecond && ev->modifiers().testFlag(Qt::ShiftModifier)) {
+                QPointF delta = wpos - m_scaleSecondPoint;
+                if (std::abs(delta.x()) >= std::abs(delta.y())) {
+                    wpos.setY(m_scaleSecondPoint.y());
+                } else {
+                    wpos.setX(m_scaleSecondPoint.x());
+                }
+            }
+            m_scaleFirstPoint = wpos;
+        } else if (m_scaleDragPoint == 2) {
+            if (m_scaleHasFirst && ev->modifiers().testFlag(Qt::ShiftModifier)) {
+                QPointF delta = wpos - m_scaleFirstPoint;
+                if (std::abs(delta.x()) >= std::abs(delta.y())) {
+                    wpos.setY(m_scaleFirstPoint.y());
+                } else {
+                    wpos.setX(m_scaleFirstPoint.x());
+                }
+            }
+            m_scaleSecondPoint = wpos;
+        }
+        update();
+        return;
+    }
     if (m_isResizingTempBubble) {
         QPointF spos = ev->position();
         QRectF rect = m_resizeStartRect;
@@ -1387,6 +1522,9 @@ void CanvasWidget::mouseReleaseEvent(QMouseEvent* ev) {
     if (ev->button() == Qt::RightButton) {
         m_isPanning = false;
         return;
+    }
+    if (m_mode == ToolMode::DefineScale && ev->button() == Qt::LeftButton) {
+        m_scaleDragPoint = 0;
     }
     if (m_activeTool && m_activeTool->mouseRelease(ev)) {
         return;
@@ -1750,10 +1888,19 @@ void CanvasWidget::keyPressEvent(QKeyEvent* ev) {
             } else if (m_textEdit) {
                 // Jeżeli trwa edycja tekstu w innych trybach (np. Select), anuluj
                 cancelTextEdit();
+            } else if (m_mode == ToolMode::DefineScale) {
+                m_mode = ToolMode::None;
+                m_scaleStep = ScaleStep::None;
+                m_scaleHasFirst = false;
+                m_scaleHasSecond = false;
+                m_scaleDragPoint = 0;
+                emitScaleStateChanged();
+                emit scaleFinished();
+                unsetCursor();
+                update();
             } else {
                 // Ogólne anulowanie: wyczyść punkty i zaznaczenia
                 m_mode = ToolMode::None;
-                m_hasFirst = false;
                 m_measurementsTool.deactivate();
                 m_activeTool = nullptr;
                 m_measurementsTool.clearSelection();
@@ -1785,18 +1932,31 @@ bool CanvasWidget::eventFilter(QObject* obj, QEvent* event) {
     return QWidget::eventFilter(obj, event);
 }
 
-void CanvasWidget::defineScalePromptAndApply(const QPointF& secondPoint) {
-    const double dx = secondPoint.x() - m_firstPoint.x();
-    const double dy = secondPoint.y() - m_firstPoint.y();
+void CanvasWidget::applyScaleFromPoints(QWidget* parent) {
+    if (!m_scaleHasFirst || !m_scaleHasSecond) {
+        return;
+    }
+    const double dx = m_scaleSecondPoint.x() - m_scaleFirstPoint.x();
+    const double dy = m_scaleSecondPoint.y() - m_scaleFirstPoint.y();
     const double distPx = std::hypot(dx, dy);
-    if (distPx <= 0.0) return;
+    if (distPx <= 0.0) {
+        return;
+    }
 
-    bool ok=false;
+    bool ok = false;
     double defaultVal = 300.0;
-    // Użyj globalnej liczby miejsc po przecinku do podawania skali
     int decimals = m_settings->decimals;
-    double val = QInputDialog::getDouble(this, "Skalowanie", "Podaj wartość odległości [cm]:", defaultVal, 0.001, 100000.0, decimals, &ok);
-    if (!ok) return;
+    double val = QInputDialog::getDouble(parent ? parent : this,
+                                         QString::fromUtf8("Skalowanie"),
+                                         QString::fromUtf8("Podaj wartość odległości [cm]:"),
+                                         defaultVal,
+                                         0.001,
+                                         100000.0,
+                                         decimals,
+                                         &ok);
+    if (!ok) {
+        return;
+    }
 
     m_pixelsPerMeter = distPx / val;
     update();

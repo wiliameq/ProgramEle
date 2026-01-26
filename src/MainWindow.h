@@ -64,6 +64,7 @@ private:
     void ensureFloorCanvas(FloorData& floor);
     void removeFloorCanvas(FloorData& floor);
     bool hasOtherFloors() const;
+    void showScaleControls();
 
     /**
      * Wyświetla w dolnym panelu (ToolSettingsWidget) kontrolki związane z rysowaniem pomiarów.

@@ -108,6 +108,7 @@ void MainWindow::onSetScale() {
         return;
     }
     m_canvas->startScaleDefinition(1.0);
+    showScaleControls();
 }
 void MainWindow::onToggleMeasuresLayer() { m_canvas->toggleMeasuresVisibility(); }
 void MainWindow::onReport() { m_canvas->openReportDialog(this); }
@@ -725,6 +726,68 @@ void MainWindow::onClearBackground() {
     }
     m_canvas->clearBackground();
     updateBackgroundControls();
+}
+
+void MainWindow::showScaleControls() {
+    QWidget* panel = new QWidget;
+    QHBoxLayout* lay = new QHBoxLayout(panel);
+    lay->setContentsMargins(4, 2, 4, 2);
+    lay->setSpacing(8);
+
+    auto statusLabel = new QLabel(QString::fromUtf8("Zaznacz pierwszy punkt"), panel);
+    lay->addWidget(statusLabel);
+
+    auto confirmBtn = new QPushButton(QString::fromUtf8("Zatwierdź"), panel);
+    auto removeBtn = new QPushButton(QString::fromUtf8("Usuń"), panel);
+    confirmBtn->setEnabled(false);
+    removeBtn->setEnabled(false);
+    lay->addWidget(confirmBtn);
+    lay->addWidget(removeBtn);
+
+    auto updateUi = [this, statusLabel, confirmBtn, removeBtn]() {
+        if (!m_canvas) {
+            confirmBtn->setEnabled(false);
+            removeBtn->setEnabled(false);
+            return;
+        }
+        int step = m_canvas->scaleStep();
+        bool hasFirst = m_canvas->scaleHasFirstPoint();
+        bool hasSecond = m_canvas->scaleHasSecondPoint();
+
+        if (step == 1) {
+            statusLabel->setText(QString::fromUtf8("Zaznacz pierwszy punkt"));
+            confirmBtn->setEnabled(hasFirst);
+        } else if (step == 2) {
+            statusLabel->setText(QString::fromUtf8("Zaznacz drugi punkt"));
+            confirmBtn->setEnabled(hasSecond);
+        } else if (step == 3) {
+            statusLabel->setText(QString::fromUtf8("Dopasuj punkty i zatwierdź"));
+            confirmBtn->setEnabled(true);
+        } else {
+            statusLabel->setText(QString::fromUtf8("Zaznacz punkt"));
+            confirmBtn->setEnabled(false);
+        }
+        removeBtn->setEnabled(hasFirst || hasSecond);
+    };
+
+    connect(confirmBtn, &QPushButton::clicked, this, [this]() {
+        if (m_canvas) {
+            m_canvas->confirmScaleStep(this);
+        }
+    });
+    connect(removeBtn, &QPushButton::clicked, this, [this]() {
+        if (m_canvas) {
+            m_canvas->removeScalePoint();
+        }
+    });
+    connect(m_canvas, &CanvasWidget::scaleStateChanged, panel,
+            [updateUi](int, bool, bool) { updateUi(); });
+    connect(m_canvas, &CanvasWidget::scaleFinished, panel, [this]() {
+        m_settingsDock->setSettingsWidget(nullptr);
+    });
+
+    updateUi();
+    m_settingsDock->setSettingsWidget(panel);
 }
 
 // --- Pomocnicza metoda ---
