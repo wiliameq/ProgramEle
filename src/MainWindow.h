@@ -34,6 +34,7 @@ private slots:
     void onBuildingChanged(int index);
     void onFloorChanged(int index);
     void onApplyBackgroundTo();
+    void onClearBackground();
 private:
     struct FloorData {
         QString name;
@@ -97,6 +98,7 @@ private:
     QPushButton* m_toggleBackgroundBtn = nullptr;
     QPushButton* m_scaleBackgroundBtn = nullptr;
     QPushButton* m_applyBackgroundBtn = nullptr;
+    QPushButton* m_clearBackgroundBtn = nullptr;
     QPushButton* m_removeBuildingBtn = nullptr;
     QPushButton* m_renameBuildingBtn = nullptr;
     QPushButton* m_removeFloorBtn = nullptr;

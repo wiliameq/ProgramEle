@@ -407,10 +407,12 @@ void MainWindow::buildProjectPanel() {
     m_toggleBackgroundBtn = new QPushButton(QString::fromUtf8("Ukryj/Pokaż tło"), m_backgroundPanel);
     m_scaleBackgroundBtn = new QPushButton(QString::fromUtf8("Wyskaluj tło"), m_backgroundPanel);
     m_applyBackgroundBtn = new QPushButton(QString::fromUtf8("Zastosuj do..."), m_backgroundPanel);
+    m_clearBackgroundBtn = new QPushButton(QString::fromUtf8("Usuń tło"), m_backgroundPanel);
     backgroundLayout->addWidget(m_insertBackgroundBtn);
     backgroundLayout->addWidget(m_toggleBackgroundBtn);
     backgroundLayout->addWidget(m_scaleBackgroundBtn);
     backgroundLayout->addWidget(m_applyBackgroundBtn);
+    backgroundLayout->addWidget(m_clearBackgroundBtn);
     controlsLayout->addWidget(m_backgroundPanel);
     m_backgroundPanel->setVisible(false);
 
@@ -438,6 +440,7 @@ void MainWindow::buildProjectPanel() {
     connect(m_toggleBackgroundBtn, &QPushButton::clicked, this, &MainWindow::onToggleBackground);
     connect(m_scaleBackgroundBtn, &QPushButton::clicked, this, &MainWindow::onSetScale);
     connect(m_applyBackgroundBtn, &QPushButton::clicked, this, &MainWindow::onApplyBackgroundTo);
+    connect(m_clearBackgroundBtn, &QPushButton::clicked, this, &MainWindow::onClearBackground);
 
     m_rightDock->setWidget(panel);
     updateBackgroundControls();
@@ -605,6 +608,9 @@ void MainWindow::updateBackgroundControls() {
     if (m_applyBackgroundBtn) {
         m_applyBackgroundBtn->setEnabled(hasBackground && hasOtherFloors());
     }
+    if (m_clearBackgroundBtn) {
+        m_clearBackgroundBtn->setEnabled(hasBackground);
+    }
 }
 
 void MainWindow::ensureFloorCanvas(FloorData& floor) {
@@ -710,6 +716,14 @@ void MainWindow::onApplyBackgroundTo() {
             }
         }
     }
+    updateBackgroundControls();
+}
+
+void MainWindow::onClearBackground() {
+    if (!m_canvas || !m_canvas->hasBackground()) {
+        return;
+    }
+    m_canvas->clearBackground();
     updateBackgroundControls();
 }
 
