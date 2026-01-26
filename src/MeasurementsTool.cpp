@@ -353,6 +353,10 @@ void MeasurementsTool::scaleAllPoints(double factor) {
     recalculateLengths();
 }
 
+void MeasurementsTool::scaleContent(double factor) {
+    scaleAllPoints(factor);
+}
+
 QColor MeasurementsTool::selectedMeasureColor() const {
     if (m_selectedMeasureIndex >= 0 && m_selectedMeasureIndex < (int)m_measures.size()) {
         return m_measures[m_selectedMeasureIndex].color;

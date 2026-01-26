@@ -58,6 +58,8 @@ public:
     void deleteSelectedMeasure();
     void clearSelection();
 
+    void scaleContent(double factor) override;
+
     bool selectMeasureAt(const QPointF& worldPos, double thresholdWorld);
     int selectedMeasureIndex() const;
 

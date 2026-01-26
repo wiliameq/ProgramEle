@@ -1975,7 +1975,7 @@ void CanvasWidget::scaleCanvasContents(double factor) {
     }
     QPointF screenCenter(width() / 2.0, height() / 2.0);
     QPointF worldCenter = toWorld(screenCenter);
-    m_measurementsTool.scaleAllPoints(factor);
+    m_measurementsTool.scaleContent(factor);
     for (auto &txt : m_textItems) {
         txt.pos.setX(txt.pos.x() * factor);
         txt.pos.setY(txt.pos.y() * factor);
