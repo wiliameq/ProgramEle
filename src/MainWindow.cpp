@@ -25,6 +25,7 @@
 #include <QDialog>
 #include <QDialogButtonBox>
 #include <QTreeWidget>
+#include <QShortcut>
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
@@ -758,9 +759,9 @@ void MainWindow::showScaleControls() {
     auto cancelBtn = new QPushButton(QString::fromUtf8("Anuluj"), panel);
     confirmBtn->setEnabled(false);
     removeBtn->setEnabled(false);
-    confirmBtn->setMinimumWidth(90);
-    removeBtn->setMinimumWidth(90);
-    cancelBtn->setMinimumWidth(90);
+    confirmBtn->setMinimumWidth(0);
+    removeBtn->setMinimumWidth(0);
+    cancelBtn->setMinimumWidth(0);
     lay->addWidget(confirmBtn);
     lay->addWidget(removeBtn);
     lay->addWidget(cancelBtn);
@@ -880,6 +881,14 @@ void MainWindow::showBackgroundAdjustControls() {
         m_canvas->undoBackgroundAdjust();
     });
     connect(closeBtn, &QPushButton::clicked, this, [this]() {
+        if (!m_canvas) {
+            return;
+        }
+        m_canvas->cancelBackgroundAdjust();
+    });
+
+    auto* escShortcut = new QShortcut(QKeySequence(Qt::Key_Escape), panel);
+    connect(escShortcut, &QShortcut::activated, this, [this]() {
         if (!m_canvas) {
             return;
         }
