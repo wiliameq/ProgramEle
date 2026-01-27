@@ -758,6 +758,9 @@ void MainWindow::showScaleControls() {
     auto cancelBtn = new QPushButton(QString::fromUtf8("Anuluj"), panel);
     confirmBtn->setEnabled(false);
     removeBtn->setEnabled(false);
+    confirmBtn->setMinimumWidth(90);
+    removeBtn->setMinimumWidth(90);
+    cancelBtn->setMinimumWidth(90);
     lay->addWidget(confirmBtn);
     lay->addWidget(removeBtn);
     lay->addWidget(cancelBtn);
@@ -828,7 +831,8 @@ void MainWindow::showBackgroundAdjustControls() {
 
     moveBtn->setCheckable(true);
     rotateBtn->setCheckable(true);
-    moveBtn->setChecked(true);
+    moveBtn->setChecked(false);
+    rotateBtn->setChecked(false);
     lay->addWidget(moveBtn);
     lay->addWidget(rotateBtn);
     lay->addStretch();

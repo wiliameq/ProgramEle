@@ -667,12 +667,13 @@ void CanvasWidget::startBackgroundAdjust() {
     }
     m_mode = ToolMode::AdjustBackground;
     m_isAdjustingBackground = true;
-    m_bgMoveMode = true;
+    m_bgMoveMode = false;
     m_bgRotateMode = false;
     m_bgDragging = false;
     m_bgSavedOffset = m_bgOffset;
     m_bgSavedRotationDeg = m_bgRotationDeg;
-    setCursor(Qt::SizeAllCursor);
+    unsetCursor();
+    setFocus();
     update();
 }
 
@@ -759,6 +760,8 @@ void CanvasWidget::startScaleDefinition(double) {
     m_mode = ToolMode::DefineScale;
     m_measurementsTool.deactivate();
     m_activeTool = nullptr;
+    setCursor(Qt::CrossCursor);
+    setFocus();
     emitScaleStateChanged();
 }
 
@@ -787,6 +790,7 @@ void CanvasWidget::confirmScaleStep(QWidget* parent) {
         m_scaleDragPoint = 0;
         emitScaleStateChanged();
         emit scaleFinished();
+        unsetCursor();
         update();
     }
 }
