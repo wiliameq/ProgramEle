@@ -468,7 +468,6 @@ void MainWindow::buildProjectPanel() {
         }
         m_canvas->setBackgroundOpacity(value / 100.0);
     });
-
     m_rightDock->setWidget(panel);
     updateBackgroundControls();
 }
