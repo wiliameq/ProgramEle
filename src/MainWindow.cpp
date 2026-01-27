@@ -112,6 +112,14 @@ void MainWindow::onSetScale() {
     m_canvas->startScaleDefinition(1.0);
     showScaleControls();
 }
+
+void MainWindow::onAdjustBackground() {
+    if (!m_canvas || !m_canvas->hasBackground()) {
+        return;
+    }
+    m_canvas->startBackgroundAdjust();
+    showBackgroundAdjustControls();
+}
 void MainWindow::onToggleMeasuresLayer() { m_canvas->toggleMeasuresVisibility(); }
 void MainWindow::onReport() { m_canvas->openReportDialog(this); }
 void MainWindow::onMeasureLinear() {
@@ -409,11 +417,13 @@ void MainWindow::buildProjectPanel() {
     m_insertBackgroundBtn = new QPushButton(QString::fromUtf8("Wstaw tło"), m_backgroundPanel);
     m_toggleBackgroundBtn = new QPushButton(QString::fromUtf8("Ukryj/Pokaż tło"), m_backgroundPanel);
     m_scaleBackgroundBtn = new QPushButton(QString::fromUtf8("Wyskaluj tło"), m_backgroundPanel);
+    m_adjustBackgroundBtn = new QPushButton(QString::fromUtf8("Dopasuj tło"), m_backgroundPanel);
     m_applyBackgroundBtn = new QPushButton(QString::fromUtf8("Zastosuj do..."), m_backgroundPanel);
     m_clearBackgroundBtn = new QPushButton(QString::fromUtf8("Usuń tło"), m_backgroundPanel);
     backgroundLayout->addWidget(m_insertBackgroundBtn);
     backgroundLayout->addWidget(m_toggleBackgroundBtn);
     backgroundLayout->addWidget(m_scaleBackgroundBtn);
+    backgroundLayout->addWidget(m_adjustBackgroundBtn);
     backgroundLayout->addWidget(m_applyBackgroundBtn);
     backgroundLayout->addWidget(m_clearBackgroundBtn);
     controlsLayout->addWidget(m_backgroundPanel);
@@ -442,6 +452,7 @@ void MainWindow::buildProjectPanel() {
     connect(m_insertBackgroundBtn, &QPushButton::clicked, this, &MainWindow::onOpenBackground);
     connect(m_toggleBackgroundBtn, &QPushButton::clicked, this, &MainWindow::onToggleBackground);
     connect(m_scaleBackgroundBtn, &QPushButton::clicked, this, &MainWindow::onSetScale);
+    connect(m_adjustBackgroundBtn, &QPushButton::clicked, this, &MainWindow::onAdjustBackground);
     connect(m_applyBackgroundBtn, &QPushButton::clicked, this, &MainWindow::onApplyBackgroundTo);
     connect(m_clearBackgroundBtn, &QPushButton::clicked, this, &MainWindow::onClearBackground);
 
@@ -607,6 +618,9 @@ void MainWindow::updateBackgroundControls() {
     }
     if (m_scaleBackgroundBtn) {
         m_scaleBackgroundBtn->setEnabled(hasBackground);
+    }
+    if (m_adjustBackgroundBtn) {
+        m_adjustBackgroundBtn->setEnabled(hasBackground);
     }
     if (m_applyBackgroundBtn) {
         m_applyBackgroundBtn->setEnabled(hasBackground && hasOtherFloors());
@@ -797,6 +811,79 @@ void MainWindow::showScaleControls() {
     });
 
     updateUi();
+    m_settingsDock->setSettingsWidget(panel);
+}
+
+void MainWindow::showBackgroundAdjustControls() {
+    QWidget* panel = new QWidget;
+    QHBoxLayout* lay = new QHBoxLayout(panel);
+    lay->setContentsMargins(4, 2, 4, 2);
+    lay->setSpacing(8);
+
+    auto moveBtn = new QPushButton(QString::fromUtf8("Przesuń"), panel);
+    auto rotateBtn = new QPushButton(QString::fromUtf8("Obróć"), panel);
+    auto confirmBtn = new QPushButton(QString::fromUtf8("Potwierdź"), panel);
+    auto undoBtn = new QPushButton(QString::fromUtf8("Cofnij"), panel);
+    auto closeBtn = new QPushButton(QString::fromUtf8("Zamknij"), panel);
+
+    moveBtn->setCheckable(true);
+    rotateBtn->setCheckable(true);
+    moveBtn->setChecked(true);
+    lay->addWidget(moveBtn);
+    lay->addWidget(rotateBtn);
+    lay->addStretch();
+    lay->addWidget(confirmBtn);
+    lay->addWidget(undoBtn);
+    lay->addWidget(closeBtn);
+
+    auto syncButtons = [this, moveBtn, rotateBtn]() {
+        if (!m_canvas) {
+            return;
+        }
+        moveBtn->setChecked(m_canvas->isBackgroundMoveMode());
+        rotateBtn->setChecked(m_canvas->isBackgroundRotateMode());
+    };
+
+    connect(moveBtn, &QPushButton::clicked, this, [this, moveBtn, rotateBtn]() {
+        if (!m_canvas) {
+            return;
+        }
+        m_canvas->setBackgroundMoveMode(true);
+        m_canvas->setBackgroundRotateMode(false);
+        moveBtn->setChecked(true);
+        rotateBtn->setChecked(false);
+    });
+    connect(rotateBtn, &QPushButton::clicked, this, [this, moveBtn, rotateBtn]() {
+        if (!m_canvas) {
+            return;
+        }
+        m_canvas->setBackgroundRotateMode(true);
+        m_canvas->setBackgroundMoveMode(false);
+        moveBtn->setChecked(false);
+        rotateBtn->setChecked(true);
+    });
+    connect(confirmBtn, &QPushButton::clicked, this, [this]() {
+        if (!m_canvas) {
+            return;
+        }
+        m_canvas->confirmBackgroundAdjust();
+        m_settingsDock->setSettingsWidget(nullptr);
+    });
+    connect(undoBtn, &QPushButton::clicked, this, [this]() {
+        if (!m_canvas) {
+            return;
+        }
+        m_canvas->undoBackgroundAdjust();
+    });
+    connect(closeBtn, &QPushButton::clicked, this, [this]() {
+        if (!m_canvas) {
+            return;
+        }
+        m_canvas->cancelBackgroundAdjust();
+        m_settingsDock->setSettingsWidget(nullptr);
+    });
+
+    syncButtons();
     m_settingsDock->setSettingsWidget(panel);
 }
 

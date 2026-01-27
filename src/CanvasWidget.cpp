@@ -566,6 +566,8 @@ bool CanvasWidget::loadBackgroundFile(const QString& file) {
     }
     m_bgImage = img;
     m_showBackground = true;
+    m_bgOffset = QPointF(0, 0);
+    m_bgRotationDeg = 0.0;
     update();
     return true;
 }
@@ -646,15 +648,102 @@ bool CanvasWidget::isBackgroundVisible() const { return m_showBackground; }
 
 void CanvasWidget::clearBackground() {
     m_bgImage = QImage();
+    m_bgOffset = QPointF(0, 0);
+    m_bgRotationDeg = 0.0;
     update();
 }
 
 void CanvasWidget::setBackgroundImage(const QImage& image) {
     m_bgImage = image;
+    m_bgOffset = QPointF(0, 0);
+    m_bgRotationDeg = 0.0;
     update();
 }
 
 const QImage& CanvasWidget::backgroundImage() const { return m_bgImage; }
+void CanvasWidget::startBackgroundAdjust() {
+    if (!hasBackground()) {
+        return;
+    }
+    m_mode = ToolMode::AdjustBackground;
+    m_isAdjustingBackground = true;
+    m_bgMoveMode = true;
+    m_bgRotateMode = false;
+    m_bgDragging = false;
+    m_bgSavedOffset = m_bgOffset;
+    m_bgSavedRotationDeg = m_bgRotationDeg;
+    setCursor(Qt::SizeAllCursor);
+    update();
+}
+
+void CanvasWidget::setBackgroundMoveMode(bool enabled) {
+    if (!m_isAdjustingBackground) {
+        return;
+    }
+    m_bgMoveMode = enabled;
+    if (enabled) {
+        m_bgRotateMode = false;
+        setCursor(Qt::SizeAllCursor);
+    } else if (!m_bgRotateMode) {
+        unsetCursor();
+    }
+}
+
+void CanvasWidget::setBackgroundRotateMode(bool enabled) {
+    if (!m_isAdjustingBackground) {
+        return;
+    }
+    m_bgRotateMode = enabled;
+    if (enabled) {
+        m_bgMoveMode = false;
+        setCursor(Qt::CrossCursor);
+    } else if (!m_bgMoveMode) {
+        unsetCursor();
+    }
+}
+
+void CanvasWidget::confirmBackgroundAdjust() {
+    if (!m_isAdjustingBackground) {
+        return;
+    }
+    m_isAdjustingBackground = false;
+    m_bgMoveMode = false;
+    m_bgRotateMode = false;
+    m_bgDragging = false;
+    m_mode = ToolMode::None;
+    unsetCursor();
+    update();
+}
+
+void CanvasWidget::cancelBackgroundAdjust() {
+    if (!m_isAdjustingBackground) {
+        return;
+    }
+    m_bgOffset = m_bgSavedOffset;
+    m_bgRotationDeg = m_bgSavedRotationDeg;
+    m_isAdjustingBackground = false;
+    m_bgMoveMode = false;
+    m_bgRotateMode = false;
+    m_bgDragging = false;
+    m_mode = ToolMode::None;
+    unsetCursor();
+    update();
+}
+
+void CanvasWidget::undoBackgroundAdjust() {
+    if (!m_isAdjustingBackground) {
+        return;
+    }
+    m_bgOffset = m_bgSavedOffset;
+    m_bgRotationDeg = m_bgSavedRotationDeg;
+    m_bgDragging = false;
+    update();
+}
+
+bool CanvasWidget::isBackgroundMoveMode() const { return m_bgMoveMode; }
+
+bool CanvasWidget::isBackgroundRotateMode() const { return m_bgRotateMode; }
+
 void CanvasWidget::toggleMeasuresVisibility() {
     m_showMeasures = !m_showMeasures;
     m_measurementsTool.setVisible(m_showMeasures);
@@ -765,7 +854,7 @@ void CanvasWidget::paintEvent(QPaintEvent*) {
     p.scale(m_zoom, m_zoom);
 
     if (m_showBackground && !m_bgImage.isNull()) {
-        p.drawImage(QPointF(0,0), m_bgImage);
+        applyBackgroundTransform(p);
     }
 
     if (m_showMeasures) {
@@ -982,6 +1071,22 @@ void CanvasWidget::drawOverlay(QPainter& p) {
     }
 }
 
+void CanvasWidget::applyBackgroundTransform(QPainter& painter) const {
+    if (m_bgImage.isNull()) {
+        return;
+    }
+    painter.save();
+    painter.translate(m_bgOffset);
+    QPointF center(m_bgImage.width() / 2.0, m_bgImage.height() / 2.0);
+    painter.translate(center);
+    if (!qFuzzyIsNull(m_bgRotationDeg)) {
+        painter.rotate(m_bgRotationDeg);
+    }
+    painter.translate(-center);
+    painter.drawImage(QPointF(0, 0), m_bgImage);
+    painter.restore();
+}
+
 void CanvasWidget::mousePressEvent(QMouseEvent* ev) {
     if (ev->button() == Qt::RightButton) {
         QPointF pos = toWorld(ev->position());
@@ -1034,6 +1139,28 @@ void CanvasWidget::mousePressEvent(QMouseEvent* ev) {
         }
         update();
         return;
+    }
+    if (m_mode == ToolMode::AdjustBackground) {
+        if (ev->button() != Qt::LeftButton || !hasBackground()) {
+            return;
+        }
+        QPointF wpos = toWorld(ev->position());
+        if (m_bgMoveMode) {
+            m_bgDragging = true;
+            m_bgDragStartWorld = wpos;
+            m_bgStartOffset = m_bgOffset;
+            grabMouse();
+            return;
+        }
+        if (m_bgRotateMode) {
+            m_bgDragging = true;
+            m_bgStartRotationDeg = m_bgRotationDeg;
+            m_bgRotateCenter = m_bgOffset + QPointF(m_bgImage.width() / 2.0, m_bgImage.height() / 2.0);
+            m_bgStartAngleDeg = std::atan2(wpos.y() - m_bgRotateCenter.y(),
+                                           wpos.x() - m_bgRotateCenter.x()) * 180.0 / M_PI;
+            grabMouse();
+            return;
+        }
     }
     if (m_activeTool && m_activeTool->mousePress(ev)) {
         return;
@@ -1364,6 +1491,18 @@ void CanvasWidget::mouseMoveEvent(QMouseEvent* ev) {
         update();
         return;
     }
+    if (m_mode == ToolMode::AdjustBackground && m_bgDragging) {
+        QPointF wpos = toWorld(ev->position());
+        if (m_bgMoveMode) {
+            m_bgOffset = m_bgStartOffset + (wpos - m_bgDragStartWorld);
+        } else if (m_bgRotateMode) {
+            double angleDeg = std::atan2(wpos.y() - m_bgRotateCenter.y(),
+                                         wpos.x() - m_bgRotateCenter.x()) * 180.0 / M_PI;
+            m_bgRotationDeg = m_bgStartRotationDeg + (angleDeg - m_bgStartAngleDeg);
+        }
+        update();
+        return;
+    }
     if (m_isResizingTempBubble) {
         QPointF spos = ev->position();
         QRectF rect = m_resizeStartRect;
@@ -1525,6 +1664,10 @@ void CanvasWidget::mouseReleaseEvent(QMouseEvent* ev) {
     }
     if (m_mode == ToolMode::DefineScale && ev->button() == Qt::LeftButton) {
         m_scaleDragPoint = 0;
+    }
+    if (m_mode == ToolMode::AdjustBackground && ev->button() == Qt::LeftButton) {
+        m_bgDragging = false;
+        releaseMouse();
     }
     if (m_activeTool && m_activeTool->mouseRelease(ev)) {
         return;
@@ -1850,6 +1993,20 @@ void CanvasWidget::cancelTextEdit() {
 void CanvasWidget::keyPressEvent(QKeyEvent* ev) {
     if (m_activeTool && m_activeTool->keyPress(ev, this)) {
         return;
+    }
+    if (m_mode == ToolMode::AdjustBackground) {
+        if (ev->key() == Qt::Key_Return || ev->key() == Qt::Key_Enter) {
+            confirmBackgroundAdjust();
+            return;
+        }
+        if (ev->key() == Qt::Key_Backspace) {
+            undoBackgroundAdjust();
+            return;
+        }
+        if (ev->key() == Qt::Key_Escape) {
+            cancelBackgroundAdjust();
+            return;
+        }
     }
     if (m_mode == ToolMode::DefineScale) {
         if (ev->key() == Qt::Key_Return || ev->key() == Qt::Key_Enter) {

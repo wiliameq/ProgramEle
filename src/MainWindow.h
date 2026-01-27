@@ -35,6 +35,7 @@ private slots:
     void onFloorChanged(int index);
     void onApplyBackgroundTo();
     void onClearBackground();
+    void onAdjustBackground();
 private:
     struct FloorData {
         QString name;
@@ -65,6 +66,7 @@ private:
     void removeFloorCanvas(FloorData& floor);
     bool hasOtherFloors() const;
     void showScaleControls();
+    void showBackgroundAdjustControls();
 
     /**
      * Wyświetla w dolnym panelu (ToolSettingsWidget) kontrolki związane z rysowaniem pomiarów.
@@ -100,6 +102,7 @@ private:
     QPushButton* m_scaleBackgroundBtn = nullptr;
     QPushButton* m_applyBackgroundBtn = nullptr;
     QPushButton* m_clearBackgroundBtn = nullptr;
+    QPushButton* m_adjustBackgroundBtn = nullptr;
     QPushButton* m_removeBuildingBtn = nullptr;
     QPushButton* m_renameBuildingBtn = nullptr;
     QPushButton* m_removeFloorBtn = nullptr;

@@ -22,6 +22,7 @@ class ReportDialog;
 enum class ToolMode {
     None,
     DefineScale,
+    AdjustBackground,
     Select,      ///< wybieranie istniejących pomiarów na płótnie
     InsertText,  ///< wstawianie tekstu w dowolnym miejscu na płótnie
     Delete       ///< usuwanie pomiarów poprzez kliknięcie
@@ -104,6 +105,14 @@ public:
     void clearBackground();
     void setBackgroundImage(const QImage& image);
     const QImage& backgroundImage() const;
+    void startBackgroundAdjust();
+    void setBackgroundMoveMode(bool enabled);
+    void setBackgroundRotateMode(bool enabled);
+    void confirmBackgroundAdjust();
+    void cancelBackgroundAdjust();
+    void undoBackgroundAdjust();
+    bool isBackgroundMoveMode() const;
+    bool isBackgroundRotateMode() const;
 
     // View & layers
     void startScaleDefinition(double);
@@ -139,12 +148,26 @@ private:
     void applyScaleFromPoints(QWidget* parent);
     void emitScaleStateChanged();
     void scaleCanvasContents(double factor);
+    void applyBackgroundTransform(QPainter& painter) const;
     // Settings
     ProjectSettings* m_settings = nullptr;
 
     // Background
     QImage m_bgImage;
     bool m_showBackground = true;
+    QPointF m_bgOffset{0,0};
+    double m_bgRotationDeg = 0.0;
+    bool m_isAdjustingBackground = false;
+    bool m_bgMoveMode = false;
+    bool m_bgRotateMode = false;
+    bool m_bgDragging = false;
+    QPointF m_bgDragStartWorld;
+    QPointF m_bgStartOffset;
+    double m_bgStartRotationDeg = 0.0;
+    double m_bgStartAngleDeg = 0.0;
+    QPointF m_bgRotateCenter;
+    QPointF m_bgSavedOffset;
+    double m_bgSavedRotationDeg = 0.0;
 
     // Measures layer
     bool m_showMeasures = true;
