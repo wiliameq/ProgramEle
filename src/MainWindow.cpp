@@ -579,6 +579,9 @@ void MainWindow::refreshProjectPanel(int preferredBuildingIndex, int preferredFl
 QString MainWindow::createProjectTempFile(const QString& projectName,
                                          const QString& address,
                                          const QString& investor) {
+    m_projectName = projectName;
+    m_projectAddress = address;
+    m_projectInvestor = investor;
     QString safeName = projectName;
     safeName.replace(QRegularExpression(QStringLiteral("[^\\w\\d\\- ]")), "_");
     safeName = safeName.trimmed();
