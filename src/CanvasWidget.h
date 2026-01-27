@@ -105,6 +105,8 @@ public:
     void clearBackground();
     void setBackgroundImage(const QImage& image);
     const QImage& backgroundImage() const;
+    void setBackgroundOpacity(double opacity);
+    double backgroundOpacity() const;
     void startBackgroundAdjust();
     void setBackgroundMoveMode(bool enabled);
     void setBackgroundRotateMode(bool enabled);
@@ -156,6 +158,7 @@ private:
     // Background
     QImage m_bgImage;
     bool m_showBackground = true;
+    double m_bgOpacity = 1.0;
     QPointF m_bgOffset{0,0};
     double m_bgRotationDeg = 0.0;
     bool m_isAdjustingBackground = false;

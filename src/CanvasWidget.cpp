@@ -642,6 +642,13 @@ void CanvasWidget::setBackgroundVisible(bool visible) {
     update();
 }
 
+void CanvasWidget::setBackgroundOpacity(double opacity) {
+    m_bgOpacity = std::clamp(opacity, 0.0, 1.0);
+    update();
+}
+
+double CanvasWidget::backgroundOpacity() const { return m_bgOpacity; }
+
 bool CanvasWidget::hasBackground() const { return !m_bgImage.isNull(); }
 
 bool CanvasWidget::isBackgroundVisible() const { return m_showBackground; }
@@ -650,6 +657,7 @@ void CanvasWidget::clearBackground() {
     m_bgImage = QImage();
     m_bgOffset = QPointF(0, 0);
     m_bgRotationDeg = 0.0;
+    m_bgOpacity = 1.0;
     update();
 }
 
@@ -657,6 +665,7 @@ void CanvasWidget::setBackgroundImage(const QImage& image) {
     m_bgImage = image;
     m_bgOffset = QPointF(0, 0);
     m_bgRotationDeg = 0.0;
+    m_bgOpacity = 1.0;
     update();
 }
 
@@ -1082,6 +1091,7 @@ void CanvasWidget::applyBackgroundTransform(QPainter& painter) const {
         return;
     }
     painter.save();
+    painter.setOpacity(m_bgOpacity);
     painter.translate(m_bgOffset);
     QPointF center(m_bgImage.width() / 2.0, m_bgImage.height() / 2.0);
     painter.translate(center);

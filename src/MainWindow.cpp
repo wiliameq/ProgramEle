@@ -26,6 +26,7 @@
 #include <QDialogButtonBox>
 #include <QTreeWidget>
 #include <QShortcut>
+#include <QSlider>
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
@@ -421,10 +422,15 @@ void MainWindow::buildProjectPanel() {
     m_adjustBackgroundBtn = new QPushButton(QString::fromUtf8("Dopasuj tło"), m_backgroundPanel);
     m_applyBackgroundBtn = new QPushButton(QString::fromUtf8("Zastosuj do..."), m_backgroundPanel);
     m_clearBackgroundBtn = new QPushButton(QString::fromUtf8("Usuń tło"), m_backgroundPanel);
+    m_backgroundOpacitySlider = new QSlider(Qt::Horizontal, m_backgroundPanel);
+    m_backgroundOpacitySlider->setRange(0, 100);
+    m_backgroundOpacitySlider->setValue(100);
+    m_backgroundOpacitySlider->setToolTip(QString::fromUtf8("Przezroczystość tła"));
     backgroundLayout->addWidget(m_insertBackgroundBtn);
     backgroundLayout->addWidget(m_toggleBackgroundBtn);
     backgroundLayout->addWidget(m_scaleBackgroundBtn);
     backgroundLayout->addWidget(m_adjustBackgroundBtn);
+    backgroundLayout->addWidget(m_backgroundOpacitySlider);
     backgroundLayout->addWidget(m_applyBackgroundBtn);
     backgroundLayout->addWidget(m_clearBackgroundBtn);
     controlsLayout->addWidget(m_backgroundPanel);
@@ -456,6 +462,12 @@ void MainWindow::buildProjectPanel() {
     connect(m_adjustBackgroundBtn, &QPushButton::clicked, this, &MainWindow::onAdjustBackground);
     connect(m_applyBackgroundBtn, &QPushButton::clicked, this, &MainWindow::onApplyBackgroundTo);
     connect(m_clearBackgroundBtn, &QPushButton::clicked, this, &MainWindow::onClearBackground);
+    connect(m_backgroundOpacitySlider, &QSlider::valueChanged, this, [this](int value) {
+        if (!m_canvas) {
+            return;
+        }
+        m_canvas->setBackgroundOpacity(value / 100.0);
+    });
 
     m_rightDock->setWidget(panel);
     updateBackgroundControls();
@@ -628,6 +640,14 @@ void MainWindow::updateBackgroundControls() {
     }
     if (m_clearBackgroundBtn) {
         m_clearBackgroundBtn->setEnabled(hasBackground);
+    }
+    if (m_backgroundOpacitySlider) {
+        m_backgroundOpacitySlider->setEnabled(hasBackground);
+        if (m_canvas) {
+            m_backgroundOpacitySlider->blockSignals(true);
+            m_backgroundOpacitySlider->setValue(static_cast<int>(m_canvas->backgroundOpacity() * 100.0));
+            m_backgroundOpacitySlider->blockSignals(false);
+        }
     }
 }
 
