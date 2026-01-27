@@ -349,6 +349,18 @@ void MainWindow::setProjectActive(bool active) {
             ? m_projectName
             : QString::fromUtf8("Brak aktywnego projektu"));
     }
+    if (m_measureReportBtn) {
+        m_measureReportBtn->setEnabled(enabled);
+    }
+    if (m_measureLinearBtn) {
+        m_measureLinearBtn->setEnabled(enabled);
+    }
+    if (m_measurePolylineBtn) {
+        m_measurePolylineBtn->setEnabled(enabled);
+    }
+    if (m_measureAdvancedBtn) {
+        m_measureAdvancedBtn->setEnabled(enabled);
+    }
 }
 
 void MainWindow::buildProjectPanel() {
@@ -449,37 +461,14 @@ void MainWindow::buildProjectPanel() {
     auto measurementsLayout = new QVBoxLayout(m_measurementsPanel);
     measurementsLayout->setContentsMargins(20, 0, 0, 0);
     measurementsLayout->setSpacing(6);
-
-    auto colorRow = new QHBoxLayout();
-    auto colorLabel = new QLabel(QString::fromUtf8("Kolor:"), m_measurementsPanel);
-    m_measurementsColorBtn = new QPushButton(m_measurementsPanel);
-    m_measurementsColorBtn->setMinimumWidth(90);
-    colorRow->addWidget(colorLabel);
-    colorRow->addWidget(m_measurementsColorBtn);
-    colorRow->addStretch();
-    measurementsLayout->addLayout(colorRow);
-
-    auto widthRow = new QHBoxLayout();
-    auto widthLabel = new QLabel(QString::fromUtf8("Grubość:"), m_measurementsPanel);
-    m_measurementsLineWidthSpin = new QSpinBox(m_measurementsPanel);
-    m_measurementsLineWidthSpin->setRange(1, 8);
-    widthRow->addWidget(widthLabel);
-    widthRow->addWidget(m_measurementsLineWidthSpin);
-    widthRow->addStretch();
-    measurementsLayout->addLayout(widthRow);
-
-    auto actionsRow = new QHBoxLayout();
-    m_measurementsUndoBtn = new QPushButton(QString::fromUtf8("Cofnij"), m_measurementsPanel);
-    m_measurementsRedoBtn = new QPushButton(QString::fromUtf8("Przywróć"), m_measurementsPanel);
-    m_measurementsConfirmBtn = new QPushButton(QString::fromUtf8("Potwierdź"), m_measurementsPanel);
-    m_measurementsCancelBtn = new QPushButton(QString::fromUtf8("Anuluj"), m_measurementsPanel);
-    actionsRow->addWidget(m_measurementsUndoBtn);
-    actionsRow->addWidget(m_measurementsRedoBtn);
-    actionsRow->addWidget(m_measurementsConfirmBtn);
-    actionsRow->addWidget(m_measurementsCancelBtn);
-    actionsRow->addStretch();
-    measurementsLayout->addLayout(actionsRow);
-
+    m_measureReportBtn = new QPushButton(QString::fromUtf8("Raport..."), m_measurementsPanel);
+    m_measureLinearBtn = new QPushButton(QString::fromUtf8("Pomiar liniowy"), m_measurementsPanel);
+    m_measurePolylineBtn = new QPushButton(QString::fromUtf8("Pomiar wieloliniowy (polilinia)"), m_measurementsPanel);
+    m_measureAdvancedBtn = new QPushButton(QString::fromUtf8("Pomiar zaawansowany..."), m_measurementsPanel);
+    measurementsLayout->addWidget(m_measureReportBtn);
+    measurementsLayout->addWidget(m_measureLinearBtn);
+    measurementsLayout->addWidget(m_measurePolylineBtn);
+    measurementsLayout->addWidget(m_measureAdvancedBtn);
     controlsLayout->addWidget(m_measurementsPanel);
     m_measurementsPanel->setVisible(false);
 
@@ -522,48 +511,10 @@ void MainWindow::buildProjectPanel() {
         }
         m_canvas->setBackgroundOpacity(value / 100.0);
     });
-    connect(m_measurementsColorBtn, &QPushButton::clicked, this, [this]() {
-        if (!m_canvas) {
-            return;
-        }
-        QColor chosen = QColorDialog::getColor(m_canvas->currentColor(), this, QString::fromUtf8("Wybierz kolor pomiaru"));
-        if (chosen.isValid()) {
-            m_canvas->setCurrentColor(chosen);
-            QString hex = chosen.name();
-            if (m_measurementsColorBtn) {
-                m_measurementsColorBtn->setStyleSheet(QString("background-color: %1").arg(hex));
-                m_measurementsColorBtn->setText(hex);
-            }
-        }
-    });
-    connect(m_measurementsLineWidthSpin, QOverload<int>::of(&QSpinBox::valueChanged), this, [this](int v) {
-        if (!m_canvas) {
-            return;
-        }
-        m_canvas->setCurrentLineWidth(v);
-    });
-    connect(m_measurementsUndoBtn, &QPushButton::clicked, this, [this]() {
-        if (m_canvas) {
-            m_canvas->undoCurrentMeasure();
-        }
-    });
-    connect(m_measurementsRedoBtn, &QPushButton::clicked, this, [this]() {
-        if (m_canvas) {
-            m_canvas->redoCurrentMeasure();
-        }
-    });
-    connect(m_measurementsConfirmBtn, &QPushButton::clicked, this, [this]() {
-        if (m_canvas) {
-            m_canvas->confirmCurrentMeasure(this);
-        }
-        setMeasurementsPanelVisible(false);
-    });
-    connect(m_measurementsCancelBtn, &QPushButton::clicked, this, [this]() {
-        if (m_canvas) {
-            m_canvas->cancelCurrentMeasure();
-        }
-        setMeasurementsPanelVisible(false);
-    });
+    connect(m_measureReportBtn, &QPushButton::clicked, this, &MainWindow::onReport);
+    connect(m_measureLinearBtn, &QPushButton::clicked, this, &MainWindow::onMeasureLinear);
+    connect(m_measurePolylineBtn, &QPushButton::clicked, this, &MainWindow::onMeasurePolyline);
+    connect(m_measureAdvancedBtn, &QPushButton::clicked, this, &MainWindow::onMeasureAdvanced);
 
     m_rightDock->setWidget(panel);
     updateBackgroundControls();
