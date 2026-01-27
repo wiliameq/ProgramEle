@@ -48,6 +48,8 @@ public:
     bool hasAnyMeasure() const;
     void updateAllMeasureColors(const QColor& color);
     void updateAllMeasureLineWidths(int width);
+    void recalculateLengths();
+    void scaleAllPoints(double factor);
 
     QColor selectedMeasureColor() const;
     int selectedMeasureLineWidth() const;
@@ -55,6 +57,8 @@ public:
     void setSelectedMeasureLineWidth(int w);
     void deleteSelectedMeasure();
     void clearSelection();
+
+    void scaleContent(double factor) override;
 
     bool selectMeasureAt(const QPointF& worldPos, double thresholdWorld);
     int selectedMeasureIndex() const;
