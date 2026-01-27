@@ -20,6 +20,7 @@
 #include <QComboBox>
 #include <QToolButton>
 #include <QStackedWidget>
+#include <QApplication>
 #include <QDialog>
 #include <QDialogButtonBox>
 #include <QTreeWidget>
@@ -738,11 +739,13 @@ void MainWindow::showScaleControls() {
     lay->addWidget(statusLabel);
 
     auto confirmBtn = new QPushButton(QString::fromUtf8("Zatwierdź"), panel);
-    auto removeBtn = new QPushButton(QString::fromUtf8("Usuń"), panel);
+    auto removeBtn = new QPushButton(QString::fromUtf8("Cofnij"), panel);
+    auto cancelBtn = new QPushButton(QString::fromUtf8("Anuluj"), panel);
     confirmBtn->setEnabled(false);
     removeBtn->setEnabled(false);
     lay->addWidget(confirmBtn);
     lay->addWidget(removeBtn);
+    lay->addWidget(cancelBtn);
 
     auto updateUi = [this, statusLabel, confirmBtn, removeBtn]() {
         if (!m_canvas) {
@@ -778,6 +781,12 @@ void MainWindow::showScaleControls() {
     connect(removeBtn, &QPushButton::clicked, this, [this]() {
         if (m_canvas) {
             m_canvas->removeScalePoint();
+        }
+    });
+    connect(cancelBtn, &QPushButton::clicked, this, [this]() {
+        if (m_canvas) {
+            QKeyEvent cancelEvent(QEvent::KeyPress, Qt::Key_Escape, Qt::NoModifier);
+            QApplication::sendEvent(m_canvas, &cancelEvent);
         }
     });
     connect(m_canvas, &CanvasWidget::scaleStateChanged, panel,

@@ -1851,6 +1851,16 @@ void CanvasWidget::keyPressEvent(QKeyEvent* ev) {
     if (m_activeTool && m_activeTool->keyPress(ev, this)) {
         return;
     }
+    if (m_mode == ToolMode::DefineScale) {
+        if (ev->key() == Qt::Key_Return || ev->key() == Qt::Key_Enter) {
+            confirmScaleStep(this);
+            return;
+        }
+        if (ev->key() == Qt::Key_Backspace) {
+            removeScalePoint();
+            return;
+        }
+    }
     switch (ev->key()) {
         case Qt::Key_Return:
         case Qt::Key_Enter:
@@ -1960,12 +1970,7 @@ void CanvasWidget::applyScaleFromPoints(QWidget* parent) {
 
     double oldPixelsPerMeter = m_pixelsPerMeter;
     m_pixelsPerMeter = distPx / val;
-    if (oldPixelsPerMeter > 0.0) {
-        double factor = m_pixelsPerMeter / oldPixelsPerMeter;
-        scaleCanvasContents(factor);
-    } else {
-        m_measurementsTool.recalculateLengths();
-    }
+    m_measurementsTool.recalculateLengths();
     update();
 }
 
