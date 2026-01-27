@@ -38,4 +38,6 @@ public:
     virtual bool mouseRelease(QMouseEvent* event) = 0;
     virtual bool mouseDoubleClick(QMouseEvent* event) = 0;
     virtual bool keyPress(QKeyEvent* event, QWidget* parentForDialogs) = 0;
+
+    virtual void scaleContent(double) {}
 };
