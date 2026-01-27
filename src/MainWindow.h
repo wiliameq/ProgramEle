@@ -10,6 +10,7 @@ class QComboBox;
 class QPushButton;
 class QToolButton;
 class QStackedWidget;
+class QSlider;
 class MainWindow : public QMainWindow {
     Q_OBJECT
 public:
@@ -103,6 +104,7 @@ private:
     QPushButton* m_applyBackgroundBtn = nullptr;
     QPushButton* m_clearBackgroundBtn = nullptr;
     QPushButton* m_adjustBackgroundBtn = nullptr;
+    QSlider* m_backgroundOpacitySlider = nullptr;
     QPushButton* m_removeBuildingBtn = nullptr;
     QPushButton* m_renameBuildingBtn = nullptr;
     QPushButton* m_removeFloorBtn = nullptr;
