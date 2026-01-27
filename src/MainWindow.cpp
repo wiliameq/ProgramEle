@@ -21,6 +21,7 @@
 #include <QToolButton>
 #include <QStackedWidget>
 #include <QApplication>
+#include <QKeyEvent>
 #include <QDialog>
 #include <QDialogButtonBox>
 #include <QTreeWidget>
