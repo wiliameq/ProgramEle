@@ -96,10 +96,22 @@ public:
 
     // Background
     bool loadBackgroundFile(const QString& file);
+    bool loadBackgroundImage(const QString& file, QImage& image) const;
     void toggleBackgroundVisibility();
+    void setBackgroundVisible(bool visible);
+    bool hasBackground() const;
+    bool isBackgroundVisible() const;
+    void clearBackground();
+    void setBackgroundImage(const QImage& image);
+    const QImage& backgroundImage() const;
 
     // View & layers
     void startScaleDefinition(double);
+    void confirmScaleStep(QWidget* parent);
+    void removeScalePoint();
+    bool scaleHasFirstPoint() const;
+    bool scaleHasSecondPoint() const;
+    int scaleStep() const;
     void toggleMeasuresVisibility();
 
     // Measurements
@@ -107,6 +119,10 @@ public:
     void startMeasurePolyline();
     void startMeasureAdvanced(QWidget* parent);
     void openReportDialog(QWidget* parent);
+
+signals:
+    void scaleStateChanged(int step, bool hasFirst, bool hasSecond);
+    void scaleFinished();
 
 protected:
     void paintEvent(QPaintEvent*) override;
@@ -120,6 +136,9 @@ protected:
 
 private:
     void commitActiveTextEdit();
+    void applyScaleFromPoints(QWidget* parent);
+    void emitScaleStateChanged();
+    void scaleCanvasContents(double factor);
     // Settings
     ProjectSettings* m_settings = nullptr;
 
@@ -132,7 +151,13 @@ private:
 
     // Scale (piksele na centymetr)
     double m_pixelsPerMeter = 100.0;
-    QPointF m_firstPoint; bool m_hasFirst = false;
+    enum class ScaleStep { None, FirstPending, SecondPending, Adjusting };
+    ScaleStep m_scaleStep = ScaleStep::None;
+    QPointF m_scaleFirstPoint;
+    QPointF m_scaleSecondPoint;
+    bool m_scaleHasFirst = false;
+    bool m_scaleHasSecond = false;
+    int m_scaleDragPoint = 0;
 
     // View transform
     double m_zoom = 1.0;
@@ -274,7 +299,6 @@ private:
     CalloutAnchor m_insertTextAnchor = CalloutAnchor::Bottom;
 
     // Helpers
-    bool loadPdfFirstPage(const QString& file);
 
 public:
     /**
@@ -288,7 +312,6 @@ public:
      * Zwraca, czy dana warstwa jest aktualnie widoczna.  Jeśli warstwa nie
      * występuje w mapie, domyślnie uważana jest za widoczną (zwraca true).
      */
-    void defineScalePromptAndApply(const QPointF& secondPoint);
     QPointF toWorld(const QPointF& screen) const override;
     QPointF toScreen(const QPointF& world) const override;
     double zoom() const override { return m_zoom; }
