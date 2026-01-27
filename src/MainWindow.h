@@ -68,9 +68,10 @@ private:
     bool hasOtherFloors() const;
     void showScaleControls();
     void showBackgroundAdjustControls();
+    void setMeasurementsPanelVisible(bool visible);
 
     /**
-     * Wyświetla w dolnym panelu (ToolSettingsWidget) kontrolki związane z rysowaniem pomiarów.
+     * Wyświetla w prawym panelu kontrolki związane z rysowaniem pomiarów.
      *
      * @param withUndoRedo gdy true, do panelu dodawane są przyciski Cofnij/Przywróć,
      *        obsługujące wielosegmentowe rysowanie (polilinia, pomiar zaawansowany). Dla
