@@ -349,6 +349,18 @@ void MainWindow::setProjectActive(bool active) {
             ? m_projectName
             : QString::fromUtf8("Brak aktywnego projektu"));
     }
+    if (m_measureReportBtn) {
+        m_measureReportBtn->setEnabled(enabled);
+    }
+    if (m_measureLinearBtn) {
+        m_measureLinearBtn->setEnabled(enabled);
+    }
+    if (m_measurePolylineBtn) {
+        m_measurePolylineBtn->setEnabled(enabled);
+    }
+    if (m_measureAdvancedBtn) {
+        m_measureAdvancedBtn->setEnabled(enabled);
+    }
 }
 
 void MainWindow::buildProjectPanel() {
@@ -436,6 +448,30 @@ void MainWindow::buildProjectPanel() {
     controlsLayout->addWidget(m_backgroundPanel);
     m_backgroundPanel->setVisible(false);
 
+    m_measurementsToggle = new QToolButton(m_projectControls);
+    m_measurementsToggle->setText(QString::fromUtf8("Pomiary"));
+    m_measurementsToggle->setToolButtonStyle(Qt::ToolButtonTextBesideIcon);
+    m_measurementsToggle->setArrowType(Qt::RightArrow);
+    m_measurementsToggle->setCheckable(true);
+    m_measurementsToggle->setChecked(false);
+    m_measurementsToggle->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Preferred);
+    controlsLayout->addWidget(m_measurementsToggle);
+
+    m_measurementsPanel = new QWidget(m_projectControls);
+    auto measurementsLayout = new QVBoxLayout(m_measurementsPanel);
+    measurementsLayout->setContentsMargins(20, 0, 0, 0);
+    measurementsLayout->setSpacing(6);
+    m_measureReportBtn = new QPushButton(QString::fromUtf8("Raport..."), m_measurementsPanel);
+    m_measureLinearBtn = new QPushButton(QString::fromUtf8("Pomiar liniowy"), m_measurementsPanel);
+    m_measurePolylineBtn = new QPushButton(QString::fromUtf8("Pomiar wieloliniowy (polilinia)"), m_measurementsPanel);
+    m_measureAdvancedBtn = new QPushButton(QString::fromUtf8("Pomiar zaawansowany..."), m_measurementsPanel);
+    measurementsLayout->addWidget(m_measureReportBtn);
+    measurementsLayout->addWidget(m_measureLinearBtn);
+    measurementsLayout->addWidget(m_measurePolylineBtn);
+    measurementsLayout->addWidget(m_measureAdvancedBtn);
+    controlsLayout->addWidget(m_measurementsPanel);
+    m_measurementsPanel->setVisible(false);
+
     layout->addWidget(m_projectControls);
     layout->addStretch(1);
 
@@ -456,6 +492,13 @@ void MainWindow::buildProjectPanel() {
         m_backgroundPanel->setVisible(checked);
         m_backgroundToggle->setArrowType(checked ? Qt::DownArrow : Qt::RightArrow);
     });
+    connect(m_measurementsToggle, &QToolButton::toggled, this, [this](bool checked) {
+        if (!m_measurementsPanel) {
+            return;
+        }
+        m_measurementsPanel->setVisible(checked);
+        m_measurementsToggle->setArrowType(checked ? Qt::DownArrow : Qt::RightArrow);
+    });
     connect(m_insertBackgroundBtn, &QPushButton::clicked, this, &MainWindow::onOpenBackground);
     connect(m_toggleBackgroundBtn, &QPushButton::clicked, this, &MainWindow::onToggleBackground);
     connect(m_scaleBackgroundBtn, &QPushButton::clicked, this, &MainWindow::onSetScale);
@@ -468,6 +511,10 @@ void MainWindow::buildProjectPanel() {
         }
         m_canvas->setBackgroundOpacity(value / 100.0);
     });
+    connect(m_measureReportBtn, &QPushButton::clicked, this, &MainWindow::onReport);
+    connect(m_measureLinearBtn, &QPushButton::clicked, this, &MainWindow::onMeasureLinear);
+    connect(m_measurePolylineBtn, &QPushButton::clicked, this, &MainWindow::onMeasurePolyline);
+    connect(m_measureAdvancedBtn, &QPushButton::clicked, this, &MainWindow::onMeasureAdvanced);
 
     m_rightDock->setWidget(panel);
     updateBackgroundControls();
