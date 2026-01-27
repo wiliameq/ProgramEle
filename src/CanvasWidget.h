@@ -22,6 +22,7 @@ class ReportDialog;
 enum class ToolMode {
     None,
     DefineScale,
+    AdjustBackground,
     Select,      ///< wybieranie istniejących pomiarów na płótnie
     InsertText,  ///< wstawianie tekstu w dowolnym miejscu na płótnie
     Delete       ///< usuwanie pomiarów poprzez kliknięcie
@@ -96,10 +97,30 @@ public:
 
     // Background
     bool loadBackgroundFile(const QString& file);
+    bool loadBackgroundImage(const QString& file, QImage& image) const;
     void toggleBackgroundVisibility();
+    void setBackgroundVisible(bool visible);
+    bool hasBackground() const;
+    bool isBackgroundVisible() const;
+    void clearBackground();
+    void setBackgroundImage(const QImage& image);
+    const QImage& backgroundImage() const;
+    void startBackgroundAdjust();
+    void setBackgroundMoveMode(bool enabled);
+    void setBackgroundRotateMode(bool enabled);
+    void confirmBackgroundAdjust();
+    void cancelBackgroundAdjust();
+    void undoBackgroundAdjust();
+    bool isBackgroundMoveMode() const;
+    bool isBackgroundRotateMode() const;
 
     // View & layers
     void startScaleDefinition(double);
+    void confirmScaleStep(QWidget* parent);
+    void removeScalePoint();
+    bool scaleHasFirstPoint() const;
+    bool scaleHasSecondPoint() const;
+    int scaleStep() const;
     void toggleMeasuresVisibility();
 
     // Measurements
@@ -107,6 +128,10 @@ public:
     void startMeasurePolyline();
     void startMeasureAdvanced(QWidget* parent);
     void openReportDialog(QWidget* parent);
+
+signals:
+    void scaleStateChanged(int step, bool hasFirst, bool hasSecond);
+    void scaleFinished();
 
 protected:
     void paintEvent(QPaintEvent*) override;
@@ -120,19 +145,42 @@ protected:
 
 private:
     void commitActiveTextEdit();
+    void applyScaleFromPoints(QWidget* parent);
+    void emitScaleStateChanged();
+    void scaleCanvasContents(double factor);
+    void applyBackgroundTransform(QPainter& painter) const;
     // Settings
     ProjectSettings* m_settings = nullptr;
 
     // Background
     QImage m_bgImage;
     bool m_showBackground = true;
+    QPointF m_bgOffset{0,0};
+    double m_bgRotationDeg = 0.0;
+    bool m_isAdjustingBackground = false;
+    bool m_bgMoveMode = false;
+    bool m_bgRotateMode = false;
+    bool m_bgDragging = false;
+    QPointF m_bgDragStartWorld;
+    QPointF m_bgStartOffset;
+    double m_bgStartRotationDeg = 0.0;
+    double m_bgStartAngleDeg = 0.0;
+    QPointF m_bgRotateCenter;
+    QPointF m_bgSavedOffset;
+    double m_bgSavedRotationDeg = 0.0;
 
     // Measures layer
     bool m_showMeasures = true;
 
     // Scale (piksele na centymetr)
     double m_pixelsPerMeter = 100.0;
-    QPointF m_firstPoint; bool m_hasFirst = false;
+    enum class ScaleStep { None, FirstPending, SecondPending, Adjusting };
+    ScaleStep m_scaleStep = ScaleStep::None;
+    QPointF m_scaleFirstPoint;
+    QPointF m_scaleSecondPoint;
+    bool m_scaleHasFirst = false;
+    bool m_scaleHasSecond = false;
+    int m_scaleDragPoint = 0;
 
     // View transform
     double m_zoom = 1.0;
@@ -274,7 +322,6 @@ private:
     CalloutAnchor m_insertTextAnchor = CalloutAnchor::Bottom;
 
     // Helpers
-    bool loadPdfFirstPage(const QString& file);
 
 public:
     /**
@@ -288,7 +335,6 @@ public:
      * Zwraca, czy dana warstwa jest aktualnie widoczna.  Jeśli warstwa nie
      * występuje w mapie, domyślnie uważana jest za widoczną (zwraca true).
      */
-    void defineScalePromptAndApply(const QPointF& secondPoint);
     QPointF toWorld(const QPointF& screen) const override;
     QPointF toScreen(const QPointF& world) const override;
     double zoom() const override { return m_zoom; }
