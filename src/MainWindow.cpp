@@ -436,6 +436,53 @@ void MainWindow::buildProjectPanel() {
     controlsLayout->addWidget(m_backgroundPanel);
     m_backgroundPanel->setVisible(false);
 
+    m_measurementsToggle = new QToolButton(m_projectControls);
+    m_measurementsToggle->setText(QString::fromUtf8("Pomiary"));
+    m_measurementsToggle->setToolButtonStyle(Qt::ToolButtonTextBesideIcon);
+    m_measurementsToggle->setArrowType(Qt::RightArrow);
+    m_measurementsToggle->setCheckable(true);
+    m_measurementsToggle->setChecked(false);
+    m_measurementsToggle->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Preferred);
+    controlsLayout->addWidget(m_measurementsToggle);
+
+    m_measurementsPanel = new QWidget(m_projectControls);
+    auto measurementsLayout = new QVBoxLayout(m_measurementsPanel);
+    measurementsLayout->setContentsMargins(20, 0, 0, 0);
+    measurementsLayout->setSpacing(6);
+
+    auto colorRow = new QHBoxLayout();
+    auto colorLabel = new QLabel(QString::fromUtf8("Kolor:"), m_measurementsPanel);
+    m_measurementsColorBtn = new QPushButton(m_measurementsPanel);
+    m_measurementsColorBtn->setMinimumWidth(90);
+    colorRow->addWidget(colorLabel);
+    colorRow->addWidget(m_measurementsColorBtn);
+    colorRow->addStretch();
+    measurementsLayout->addLayout(colorRow);
+
+    auto widthRow = new QHBoxLayout();
+    auto widthLabel = new QLabel(QString::fromUtf8("Grubość:"), m_measurementsPanel);
+    m_measurementsLineWidthSpin = new QSpinBox(m_measurementsPanel);
+    m_measurementsLineWidthSpin->setRange(1, 8);
+    widthRow->addWidget(widthLabel);
+    widthRow->addWidget(m_measurementsLineWidthSpin);
+    widthRow->addStretch();
+    measurementsLayout->addLayout(widthRow);
+
+    auto actionsRow = new QHBoxLayout();
+    m_measurementsUndoBtn = new QPushButton(QString::fromUtf8("Cofnij"), m_measurementsPanel);
+    m_measurementsRedoBtn = new QPushButton(QString::fromUtf8("Przywróć"), m_measurementsPanel);
+    m_measurementsConfirmBtn = new QPushButton(QString::fromUtf8("Potwierdź"), m_measurementsPanel);
+    m_measurementsCancelBtn = new QPushButton(QString::fromUtf8("Anuluj"), m_measurementsPanel);
+    actionsRow->addWidget(m_measurementsUndoBtn);
+    actionsRow->addWidget(m_measurementsRedoBtn);
+    actionsRow->addWidget(m_measurementsConfirmBtn);
+    actionsRow->addWidget(m_measurementsCancelBtn);
+    actionsRow->addStretch();
+    measurementsLayout->addLayout(actionsRow);
+
+    controlsLayout->addWidget(m_measurementsPanel);
+    m_measurementsPanel->setVisible(false);
+
     layout->addWidget(m_projectControls);
     layout->addStretch(1);
 
@@ -456,6 +503,13 @@ void MainWindow::buildProjectPanel() {
         m_backgroundPanel->setVisible(checked);
         m_backgroundToggle->setArrowType(checked ? Qt::DownArrow : Qt::RightArrow);
     });
+    connect(m_measurementsToggle, &QToolButton::toggled, this, [this](bool checked) {
+        if (!m_measurementsPanel) {
+            return;
+        }
+        m_measurementsPanel->setVisible(checked);
+        m_measurementsToggle->setArrowType(checked ? Qt::DownArrow : Qt::RightArrow);
+    });
     connect(m_insertBackgroundBtn, &QPushButton::clicked, this, &MainWindow::onOpenBackground);
     connect(m_toggleBackgroundBtn, &QPushButton::clicked, this, &MainWindow::onToggleBackground);
     connect(m_scaleBackgroundBtn, &QPushButton::clicked, this, &MainWindow::onSetScale);
@@ -467,6 +521,48 @@ void MainWindow::buildProjectPanel() {
             return;
         }
         m_canvas->setBackgroundOpacity(value / 100.0);
+    });
+    connect(m_measurementsColorBtn, &QPushButton::clicked, this, [this]() {
+        if (!m_canvas) {
+            return;
+        }
+        QColor chosen = QColorDialog::getColor(m_canvas->currentColor(), this, QString::fromUtf8("Wybierz kolor pomiaru"));
+        if (chosen.isValid()) {
+            m_canvas->setCurrentColor(chosen);
+            QString hex = chosen.name();
+            if (m_measurementsColorBtn) {
+                m_measurementsColorBtn->setStyleSheet(QString("background-color: %1").arg(hex));
+                m_measurementsColorBtn->setText(hex);
+            }
+        }
+    });
+    connect(m_measurementsLineWidthSpin, QOverload<int>::of(&QSpinBox::valueChanged), this, [this](int v) {
+        if (!m_canvas) {
+            return;
+        }
+        m_canvas->setCurrentLineWidth(v);
+    });
+    connect(m_measurementsUndoBtn, &QPushButton::clicked, this, [this]() {
+        if (m_canvas) {
+            m_canvas->undoCurrentMeasure();
+        }
+    });
+    connect(m_measurementsRedoBtn, &QPushButton::clicked, this, [this]() {
+        if (m_canvas) {
+            m_canvas->redoCurrentMeasure();
+        }
+    });
+    connect(m_measurementsConfirmBtn, &QPushButton::clicked, this, [this]() {
+        if (m_canvas) {
+            m_canvas->confirmCurrentMeasure(this);
+        }
+        setMeasurementsPanelVisible(false);
+    });
+    connect(m_measurementsCancelBtn, &QPushButton::clicked, this, [this]() {
+        if (m_canvas) {
+            m_canvas->cancelCurrentMeasure();
+        }
+        setMeasurementsPanelVisible(false);
     });
 
     m_rightDock->setWidget(panel);
@@ -622,6 +718,18 @@ void MainWindow::applyCanvasForSelection() {
     }
     m_canvas = floor->canvas;
     updateBackgroundControls();
+    if (m_measurementsPanel && m_measurementsPanel->isVisible() && m_canvas) {
+        if (m_measurementsLineWidthSpin) {
+            m_measurementsLineWidthSpin->blockSignals(true);
+            m_measurementsLineWidthSpin->setValue(m_canvas->currentLineWidth());
+            m_measurementsLineWidthSpin->blockSignals(false);
+        }
+        if (m_measurementsColorBtn) {
+            QString hex = m_canvas->currentColor().name();
+            m_measurementsColorBtn->setStyleSheet(QString("background-color: %1").arg(hex));
+            m_measurementsColorBtn->setText(hex);
+        }
+    }
 }
 
 void MainWindow::updateBackgroundControls() {
@@ -651,6 +759,16 @@ void MainWindow::updateBackgroundControls() {
     }
 }
 
+void MainWindow::setMeasurementsPanelVisible(bool visible) {
+    if (m_measurementsToggle) {
+        m_measurementsToggle->setChecked(visible);
+        m_measurementsToggle->setArrowType(visible ? Qt::DownArrow : Qt::RightArrow);
+    }
+    if (m_measurementsPanel) {
+        m_measurementsPanel->setVisible(visible);
+    }
+}
+
 void MainWindow::ensureFloorCanvas(FloorData& floor) {
     if (floor.canvas || !m_canvasStack) {
         return;
@@ -658,7 +776,7 @@ void MainWindow::ensureFloorCanvas(FloorData& floor) {
     floor.canvas = new CanvasWidget(m_canvasStack, &m_settings);
     m_canvasStack->addWidget(floor.canvas);
     connect(floor.canvas, &CanvasWidget::measurementFinished, this, [this]() {
-        m_settingsDock->setSettingsWidget(nullptr);
+        setMeasurementsPanelVisible(false);
     });
 }
 
@@ -932,87 +1050,34 @@ void MainWindow::showBackgroundAdjustControls() {
 }
 
 // --- Pomocnicza metoda ---
-// Ustawia panel dolny na tryb rysowania pomiarów. Pozwala wybrać kolor i grubość linii,
+// Ustawia prawy panel na tryb rysowania pomiarów. Pozwala wybrać kolor i grubość linii,
 // oraz potwierdzić/anulować/cofnąć/przywrócić rysowanie. Parametr withUndoRedo kontroluje
 // obecność przycisków cofania/przywracania (dla polilinii i pomiaru zaawansowanego).
 void MainWindow::showMeasurementControls(bool withUndoRedo) {
-    // Utwórz nowy widżet ustawień narzędzia. Po ustawieniu zostanie on
-    // automatycznie zniszczony przez ToolSettingsWidget (przy kolejnej zmianie).
-    QWidget* panel = new QWidget;
-    QHBoxLayout* lay = new QHBoxLayout(panel);
-    lay->setContentsMargins(4,2,4,2);
-    lay->setSpacing(8);
+    if (!m_measurementsPanel || !m_canvas) {
+        return;
+    }
 
-    // --- Wybór koloru (tylko bieżący pomiar) ---
-    auto colorLabel = new QLabel(QString::fromUtf8("Kolor:"), panel);
-    lay->addWidget(colorLabel);
-    auto colorBtn = new QPushButton(panel);
-    // Funkcja pomocnicza do aktualizacji wyglądu przycisku zgodnie z aktualnym kolorem
-    auto updateColorBtn = [this, colorBtn]() {
+    if (m_measurementsUndoBtn) {
+        m_measurementsUndoBtn->setVisible(withUndoRedo);
+    }
+    if (m_measurementsRedoBtn) {
+        m_measurementsRedoBtn->setVisible(withUndoRedo);
+    }
+    if (m_measurementsConfirmBtn) {
+        m_measurementsConfirmBtn->setVisible(withUndoRedo);
+    }
+
+    if (m_measurementsLineWidthSpin) {
+        m_measurementsLineWidthSpin->blockSignals(true);
+        m_measurementsLineWidthSpin->setValue(m_canvas->currentLineWidth());
+        m_measurementsLineWidthSpin->blockSignals(false);
+    }
+    if (m_measurementsColorBtn) {
         QString hex = m_canvas->currentColor().name();
-        colorBtn->setStyleSheet(QString("background-color: %1").arg(hex));
-        colorBtn->setText(hex);
-    };
-    updateColorBtn();
-    lay->addWidget(colorBtn);
-    // Obsługa kliknięcia: zmiana koloru tylko dla bieżącego pomiaru.  Nie modyfikujemy
-    // ustawień globalnych i nie pytamy o aktualizację istniejących pomiarów.
-    connect(colorBtn, &QPushButton::clicked, this, [this, updateColorBtn, colorBtn]() {
-        // Wybór koloru tylko dla bieżącego pomiaru
-        QColor chosen = QColorDialog::getColor(m_canvas->currentColor(), this, QString::fromUtf8("Wybierz kolor pomiaru"));
-        if (chosen.isValid()) {
-            m_canvas->setCurrentColor(chosen);
-            updateColorBtn();
-        }
-    });
-
-    // --- Grubość linii ---
-    auto lwLabel = new QLabel(QString::fromUtf8("Grubość:"), panel);
-    lay->addWidget(lwLabel);
-    auto lwSpin = new QSpinBox(panel);
-    lwSpin->setRange(1, 8);
-    // Ustaw wartość początkową z bieżącej grubości linii na płótnie
-    lwSpin->setValue(m_canvas->currentLineWidth());
-    lay->addWidget(lwSpin);
-    connect(lwSpin, QOverload<int>::of(&QSpinBox::valueChanged), this, [this](int v){
-        // Aktualizuj tylko bieżący pomiar, bez modyfikacji ustawień globalnych
-        m_canvas->setCurrentLineWidth(v);
-    });
-
-    lay->addStretch();
-
-    // --- Przyciski cofnięcia / przywrócenia ---
-    if (withUndoRedo) {
-        auto undoBtn = new QPushButton(QString::fromUtf8("Cofnij"), panel);
-        lay->addWidget(undoBtn);
-        connect(undoBtn, &QPushButton::clicked, this, [this](){ m_canvas->undoCurrentMeasure(); });
-        auto redoBtn = new QPushButton(QString::fromUtf8("Przywróć"), panel);
-        lay->addWidget(redoBtn);
-        connect(redoBtn, &QPushButton::clicked, this, [this](){ m_canvas->redoCurrentMeasure(); });
+        m_measurementsColorBtn->setStyleSheet(QString("background-color: %1").arg(hex));
+        m_measurementsColorBtn->setText(hex);
     }
 
-    // --- Przyciski potwierdzenia / anulowania ---
-    // Przyciski "Potwierdź" i "Anuluj" są potrzebne tylko dla pomiaru wielosegmentowego
-    // (polilinia, pomiar zaawansowany).  W przypadku pomiaru liniowego (z jednym segmentem)
-    // potwierdzenie nie jest potrzebne, ponieważ pomiar kończy się automatycznie po
-    // wstawieniu dwóch punktów.
-    if (withUndoRedo) {
-        auto confirmBtn = new QPushButton(QString::fromUtf8("Potwierdź"), panel);
-        lay->addWidget(confirmBtn);
-        connect(confirmBtn, &QPushButton::clicked, this, [this]() {
-            // Zakończ bieżący pomiar i schowaj panel ustawień
-            m_canvas->confirmCurrentMeasure(this);
-            m_settingsDock->setSettingsWidget(nullptr);
-        });
-    }
-    auto cancelBtn = new QPushButton(QString::fromUtf8("Anuluj"), panel);
-    lay->addWidget(cancelBtn);
-    connect(cancelBtn, &QPushButton::clicked, this, [this]() {
-        // Anuluj bieżący pomiar i schowaj panel
-        m_canvas->cancelCurrentMeasure();
-        m_settingsDock->setSettingsWidget(nullptr);
-    });
-
-    panel->setLayout(lay);
-    m_settingsDock->setSettingsWidget(panel);
+    setMeasurementsPanelVisible(true);
 }
