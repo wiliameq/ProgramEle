@@ -888,6 +888,7 @@ void MainWindow::showBackgroundAdjustControls() {
     });
 
     auto* escShortcut = new QShortcut(QKeySequence(Qt::Key_Escape), panel);
+    escShortcut->setContext(Qt::ApplicationShortcut);
     connect(escShortcut, &QShortcut::activated, this, [this]() {
         if (!m_canvas) {
             return;
