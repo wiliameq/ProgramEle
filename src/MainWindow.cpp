@@ -751,9 +751,6 @@ void MainWindow::showScaleControls() {
     lay->setContentsMargins(4, 2, 4, 2);
     lay->setSpacing(8);
 
-    auto statusLabel = new QLabel(QString::fromUtf8("Zaznacz pierwszy punkt"), panel);
-    lay->addWidget(statusLabel);
-
     auto confirmBtn = new QPushButton(QString::fromUtf8("Zatwierdź"), panel);
     auto removeBtn = new QPushButton(QString::fromUtf8("Cofnij"), panel);
     auto cancelBtn = new QPushButton(QString::fromUtf8("Anuluj"), panel);
@@ -762,6 +759,12 @@ void MainWindow::showScaleControls() {
     confirmBtn->setMinimumWidth(0);
     removeBtn->setMinimumWidth(0);
     cancelBtn->setMinimumWidth(0);
+    confirmBtn->setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Preferred);
+    removeBtn->setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Preferred);
+    cancelBtn->setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Preferred);
+    auto statusLabel = new QLabel(QString::fromUtf8("Zaznacz pierwszy punkt"), panel);
+    statusLabel->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Preferred);
+    lay->addWidget(statusLabel, 1);
     lay->addWidget(confirmBtn);
     lay->addWidget(removeBtn);
     lay->addWidget(cancelBtn);
@@ -888,6 +891,7 @@ void MainWindow::showBackgroundAdjustControls() {
     });
 
     auto* escShortcut = new QShortcut(QKeySequence(Qt::Key_Escape), panel);
+    escShortcut->setContext(Qt::ApplicationShortcut);
     connect(escShortcut, &QShortcut::activated, this, [this]() {
         if (!m_canvas) {
             return;
