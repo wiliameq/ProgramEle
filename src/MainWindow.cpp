@@ -693,6 +693,10 @@ void MainWindow::onApplyBackgroundTo() {
     dialog.setWindowTitle(QString::fromUtf8("Zastosuj tło do"));
     auto* layout = new QVBoxLayout(&dialog);
 
+    auto* warningLabel = new QLabel(QString::fromUtf8("Uwaga: Po zastosowaniu tła konieczne jest ponowne wyskalowanie."), &dialog);
+    warningLabel->setWordWrap(true);
+    layout->addWidget(warningLabel);
+
     auto* tree = new QTreeWidget(&dialog);
     tree->setHeaderLabels({QString::fromUtf8("Budynek / Piętro")});
     tree->setSelectionMode(QAbstractItemView::NoSelection);
