@@ -880,6 +880,9 @@ void MainWindow::showBackgroundAdjustControls() {
             return;
         }
         m_canvas->cancelBackgroundAdjust();
+    });
+
+    connect(m_canvas, &CanvasWidget::backgroundAdjustFinished, panel, [this]() {
         m_settingsDock->setSettingsWidget(nullptr);
     });
 

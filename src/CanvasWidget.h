@@ -132,6 +132,7 @@ public:
 signals:
     void scaleStateChanged(int step, bool hasFirst, bool hasSecond);
     void scaleFinished();
+    void backgroundAdjustFinished();
 
 protected:
     void paintEvent(QPaintEvent*) override;

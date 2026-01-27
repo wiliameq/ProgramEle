@@ -713,6 +713,7 @@ void CanvasWidget::confirmBackgroundAdjust() {
     m_mode = ToolMode::None;
     unsetCursor();
     update();
+    emit backgroundAdjustFinished();
 }
 
 void CanvasWidget::cancelBackgroundAdjust() {
@@ -728,6 +729,7 @@ void CanvasWidget::cancelBackgroundAdjust() {
     m_mode = ToolMode::None;
     unsetCursor();
     update();
+    emit backgroundAdjustFinished();
 }
 
 void CanvasWidget::undoBackgroundAdjust() {
