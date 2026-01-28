@@ -50,7 +50,8 @@ private:
 
     CanvasWidget* m_canvas = nullptr;
     ProjectSettings m_settings;
-    void createMenus(QMenuBar* targetMenuBar);
+    void createMenus();
+    void createMeasurementsMenu(QMenuBar* targetMenuBar);
     void setProjectActive(bool active);
     void buildProjectPanel();
     void refreshProjectPanel(int preferredBuildingIndex = -1, int preferredFloorIndex = -1);

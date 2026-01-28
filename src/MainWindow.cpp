@@ -54,17 +54,25 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent) {
     addDockWidget(Qt::BottomDockWidgetArea, m_settingsDock);
 
     buildProjectPanel();
-    createMenus(m_projectMenuBar);
+    createMenus();
+    createMeasurementsMenu(m_projectMenuBar);
     setProjectActive(false);
     statusBar()->showMessage("Gotowy");
 }
-void MainWindow::createMenus(QMenuBar* targetMenuBar) {
+void MainWindow::createMenus() {
+    auto fileMenu = menuBar()->addMenu("Plik");
+    m_newProjectAction = fileMenu->addAction("Nowy projekt...");
+    connect(m_newProjectAction, &QAction::triggered, this, &MainWindow::onNewProject);
+    auto viewMenu = menuBar()->addMenu("Widok");
+    m_toggleMeasuresLayerAction = viewMenu->addAction("Warstwy → Pomiary");
+    m_toggleMeasuresLayerAction->setCheckable(true);
+    m_toggleMeasuresLayerAction->setChecked(true);
+    connect(m_toggleMeasuresLayerAction, &QAction::toggled, this, &MainWindow::onToggleMeasuresLayer);
+}
+void MainWindow::createMeasurementsMenu(QMenuBar* targetMenuBar) {
     if (!targetMenuBar) {
         return;
     }
-    auto fileMenu = targetMenuBar->addMenu("Plik");
-    m_newProjectAction = fileMenu->addAction("Nowy projekt...");
-    connect(m_newProjectAction, &QAction::triggered, this, &MainWindow::onNewProject);
     auto measMenu = targetMenuBar->addMenu("Pomiary");
     m_reportAction = measMenu->addAction("Raport...");
     connect(m_reportAction, &QAction::triggered, this, &MainWindow::onReport);
@@ -74,11 +82,6 @@ void MainWindow::createMenus(QMenuBar* targetMenuBar) {
     connect(m_measurePolylineAction, &QAction::triggered, this, &MainWindow::onMeasurePolyline);
     m_measureAdvancedAction = measMenu->addAction("Pomiar zaawansowany...");
     connect(m_measureAdvancedAction, &QAction::triggered, this, &MainWindow::onMeasureAdvanced);
-    auto viewMenu = targetMenuBar->addMenu("Widok");
-    m_toggleMeasuresLayerAction = viewMenu->addAction("Warstwy → Pomiary");
-    m_toggleMeasuresLayerAction->setCheckable(true);
-    m_toggleMeasuresLayerAction->setChecked(true);
-    connect(m_toggleMeasuresLayerAction, &QAction::toggled, this, &MainWindow::onToggleMeasuresLayer);
 }
 void MainWindow::onOpenBackground() {
     if (!m_canvas) {
