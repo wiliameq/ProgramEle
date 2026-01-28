@@ -68,9 +68,10 @@ private:
     bool hasOtherFloors() const;
     void showScaleControls();
     void showBackgroundAdjustControls();
+    void setMeasurementsPanelVisible(bool visible);
 
     /**
-     * Wyświetla w dolnym panelu (ToolSettingsWidget) kontrolki związane z rysowaniem pomiarów.
+     * Wyświetla w prawym panelu kontrolki związane z rysowaniem pomiarów.
      *
      * @param withUndoRedo gdy true, do panelu dodawane są przyciski Cofnij/Przywróć,
      *        obsługujące wielosegmentowe rysowanie (polilinia, pomiar zaawansowany). Dla
@@ -98,6 +99,10 @@ private:
     QComboBox* m_floorCombo = nullptr;
     QWidget* m_backgroundPanel = nullptr;
     QToolButton* m_backgroundToggle = nullptr;
+    QPushButton* m_measureReportBtn = nullptr;
+    QPushButton* m_measureLinearBtn = nullptr;
+    QPushButton* m_measurePolylineBtn = nullptr;
+    QPushButton* m_measureAdvancedBtn = nullptr;
     QPushButton* m_insertBackgroundBtn = nullptr;
     QPushButton* m_toggleBackgroundBtn = nullptr;
     QPushButton* m_scaleBackgroundBtn = nullptr;
