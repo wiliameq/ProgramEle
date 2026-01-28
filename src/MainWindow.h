@@ -99,8 +99,6 @@ private:
     QComboBox* m_floorCombo = nullptr;
     QWidget* m_backgroundPanel = nullptr;
     QToolButton* m_backgroundToggle = nullptr;
-    QWidget* m_measurementsPanel = nullptr;
-    QToolButton* m_measurementsToggle = nullptr;
     QPushButton* m_measureReportBtn = nullptr;
     QPushButton* m_measureLinearBtn = nullptr;
     QPushButton* m_measurePolylineBtn = nullptr;

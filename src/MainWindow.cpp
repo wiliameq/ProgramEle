@@ -448,29 +448,20 @@ void MainWindow::buildProjectPanel() {
     controlsLayout->addWidget(m_backgroundPanel);
     m_backgroundPanel->setVisible(false);
 
-    m_measurementsToggle = new QToolButton(m_projectControls);
-    m_measurementsToggle->setText(QString::fromUtf8("Pomiary"));
-    m_measurementsToggle->setToolButtonStyle(Qt::ToolButtonTextBesideIcon);
-    m_measurementsToggle->setArrowType(Qt::RightArrow);
-    m_measurementsToggle->setCheckable(true);
-    m_measurementsToggle->setChecked(false);
-    m_measurementsToggle->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Preferred);
-    controlsLayout->addWidget(m_measurementsToggle);
+    auto measurementsTitle = new QLabel(QString::fromUtf8("Pomiary"), m_projectControls);
+    QFont measurementsFont = measurementsTitle->font();
+    measurementsFont.setBold(true);
+    measurementsTitle->setFont(measurementsFont);
+    controlsLayout->addWidget(measurementsTitle);
 
-    m_measurementsPanel = new QWidget(m_projectControls);
-    auto measurementsLayout = new QVBoxLayout(m_measurementsPanel);
-    measurementsLayout->setContentsMargins(20, 0, 0, 0);
-    measurementsLayout->setSpacing(6);
-    m_measureReportBtn = new QPushButton(QString::fromUtf8("Raport..."), m_measurementsPanel);
-    m_measureLinearBtn = new QPushButton(QString::fromUtf8("Pomiar liniowy"), m_measurementsPanel);
-    m_measurePolylineBtn = new QPushButton(QString::fromUtf8("Pomiar wieloliniowy (polilinia)"), m_measurementsPanel);
-    m_measureAdvancedBtn = new QPushButton(QString::fromUtf8("Pomiar zaawansowany..."), m_measurementsPanel);
-    measurementsLayout->addWidget(m_measureReportBtn);
-    measurementsLayout->addWidget(m_measureLinearBtn);
-    measurementsLayout->addWidget(m_measurePolylineBtn);
-    measurementsLayout->addWidget(m_measureAdvancedBtn);
-    controlsLayout->addWidget(m_measurementsPanel);
-    m_measurementsPanel->setVisible(false);
+    m_measureReportBtn = new QPushButton(QString::fromUtf8("Raport..."), m_projectControls);
+    m_measureLinearBtn = new QPushButton(QString::fromUtf8("Pomiar liniowy"), m_projectControls);
+    m_measurePolylineBtn = new QPushButton(QString::fromUtf8("Pomiar wieloliniowy (polilinia)"), m_projectControls);
+    m_measureAdvancedBtn = new QPushButton(QString::fromUtf8("Pomiar zaawansowany..."), m_projectControls);
+    controlsLayout->addWidget(m_measureReportBtn);
+    controlsLayout->addWidget(m_measureLinearBtn);
+    controlsLayout->addWidget(m_measurePolylineBtn);
+    controlsLayout->addWidget(m_measureAdvancedBtn);
 
     layout->addWidget(m_projectControls);
     layout->addStretch(1);
