@@ -448,25 +448,6 @@ void MainWindow::buildProjectPanel() {
     controlsLayout->addWidget(m_backgroundPanel);
     m_backgroundPanel->setVisible(false);
 
-    auto measurementsTitle = new QLabel(QString::fromUtf8("Pomiary"), m_projectControls);
-    QFont measurementsFont = measurementsTitle->font();
-    measurementsFont.setBold(true);
-    measurementsTitle->setFont(measurementsFont);
-    controlsLayout->addWidget(measurementsTitle);
-
-    auto measurementsPanel = new QWidget(m_projectControls);
-    auto measurementsLayout = new QVBoxLayout(measurementsPanel);
-    measurementsLayout->setContentsMargins(20, 0, 0, 0);
-    measurementsLayout->setSpacing(6);
-    m_measureReportBtn = new QPushButton(QString::fromUtf8("Raport..."), measurementsPanel);
-    m_measureLinearBtn = new QPushButton(QString::fromUtf8("Pomiar liniowy"), measurementsPanel);
-    m_measurePolylineBtn = new QPushButton(QString::fromUtf8("Pomiar wieloliniowy (polilinia)"), measurementsPanel);
-    m_measureAdvancedBtn = new QPushButton(QString::fromUtf8("Pomiar zaawansowany..."), measurementsPanel);
-    measurementsLayout->addWidget(m_measureReportBtn);
-    measurementsLayout->addWidget(m_measureLinearBtn);
-    measurementsLayout->addWidget(m_measurePolylineBtn);
-    measurementsLayout->addWidget(m_measureAdvancedBtn);
-    controlsLayout->addWidget(measurementsPanel);
 
     layout->addWidget(m_projectControls);
     layout->addStretch(1);
