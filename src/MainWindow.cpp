@@ -54,7 +54,6 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent) {
     addDockWidget(Qt::BottomDockWidgetArea, m_settingsDock);
 
     buildProjectPanel();
-
     createMenus();
     setProjectActive(false);
     statusBar()->showMessage("Gotowy");
@@ -63,15 +62,6 @@ void MainWindow::createMenus() {
     auto fileMenu = menuBar()->addMenu("Plik");
     m_newProjectAction = fileMenu->addAction("Nowy projekt...");
     connect(m_newProjectAction, &QAction::triggered, this, &MainWindow::onNewProject);
-    auto measMenu = menuBar()->addMenu("Pomiary");
-    m_reportAction = measMenu->addAction("Raport...");
-    connect(m_reportAction, &QAction::triggered, this, &MainWindow::onReport);
-    m_measureLinearAction = measMenu->addAction("Pomiar liniowy");
-    connect(m_measureLinearAction, &QAction::triggered, this, &MainWindow::onMeasureLinear);
-    m_measurePolylineAction = measMenu->addAction("Pomiar wieloliniowy (polilinia)");
-    connect(m_measurePolylineAction, &QAction::triggered, this, &MainWindow::onMeasurePolyline);
-    m_measureAdvancedAction = measMenu->addAction("Pomiar zaawansowany...");
-    connect(m_measureAdvancedAction, &QAction::triggered, this, &MainWindow::onMeasureAdvanced);
     auto viewMenu = menuBar()->addMenu("Widok");
     m_toggleMeasuresLayerAction = viewMenu->addAction("Warstwy → Pomiary");
     m_toggleMeasuresLayerAction->setCheckable(true);
@@ -421,6 +411,30 @@ void MainWindow::buildProjectPanel() {
     controlsLayout->addWidget(m_backgroundPanel);
     m_backgroundPanel->setVisible(false);
 
+    m_measurementsToggle = new QToolButton(m_projectControls);
+    m_measurementsToggle->setText(QString::fromUtf8("Pomiary"));
+    m_measurementsToggle->setToolButtonStyle(Qt::ToolButtonTextBesideIcon);
+    m_measurementsToggle->setArrowType(Qt::RightArrow);
+    m_measurementsToggle->setCheckable(true);
+    m_measurementsToggle->setChecked(false);
+    m_measurementsToggle->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Preferred);
+    controlsLayout->addWidget(m_measurementsToggle);
+
+    m_measurementsPanel = new QWidget(m_projectControls);
+    auto measurementsLayout = new QVBoxLayout(m_measurementsPanel);
+    measurementsLayout->setContentsMargins(20, 0, 0, 0);
+    measurementsLayout->setSpacing(6);
+    m_reportBtn = new QPushButton(QString::fromUtf8("Raport..."), m_measurementsPanel);
+    m_measureLinearBtn = new QPushButton(QString::fromUtf8("Pomiar liniowy"), m_measurementsPanel);
+    m_measurePolylineBtn = new QPushButton(QString::fromUtf8("Pomiar wieloliniowy (polilinia)"), m_measurementsPanel);
+    m_measureAdvancedBtn = new QPushButton(QString::fromUtf8("Pomiar zaawansowany..."), m_measurementsPanel);
+    measurementsLayout->addWidget(m_reportBtn);
+    measurementsLayout->addWidget(m_measureLinearBtn);
+    measurementsLayout->addWidget(m_measurePolylineBtn);
+    measurementsLayout->addWidget(m_measureAdvancedBtn);
+    controlsLayout->addWidget(m_measurementsPanel);
+    m_measurementsPanel->setVisible(false);
+
 
     layout->addWidget(m_projectControls);
     layout->addStretch(1);
@@ -442,12 +456,23 @@ void MainWindow::buildProjectPanel() {
         m_backgroundPanel->setVisible(checked);
         m_backgroundToggle->setArrowType(checked ? Qt::DownArrow : Qt::RightArrow);
     });
+    connect(m_measurementsToggle, &QToolButton::toggled, this, [this](bool checked) {
+        if (!m_measurementsPanel) {
+            return;
+        }
+        m_measurementsPanel->setVisible(checked);
+        m_measurementsToggle->setArrowType(checked ? Qt::DownArrow : Qt::RightArrow);
+    });
     connect(m_insertBackgroundBtn, &QPushButton::clicked, this, &MainWindow::onOpenBackground);
     connect(m_toggleBackgroundBtn, &QPushButton::clicked, this, &MainWindow::onToggleBackground);
     connect(m_scaleBackgroundBtn, &QPushButton::clicked, this, &MainWindow::onSetScale);
     connect(m_adjustBackgroundBtn, &QPushButton::clicked, this, &MainWindow::onAdjustBackground);
     connect(m_applyBackgroundBtn, &QPushButton::clicked, this, &MainWindow::onApplyBackgroundTo);
     connect(m_clearBackgroundBtn, &QPushButton::clicked, this, &MainWindow::onClearBackground);
+    connect(m_reportBtn, &QPushButton::clicked, this, &MainWindow::onReport);
+    connect(m_measureLinearBtn, &QPushButton::clicked, this, &MainWindow::onMeasureLinear);
+    connect(m_measurePolylineBtn, &QPushButton::clicked, this, &MainWindow::onMeasurePolyline);
+    connect(m_measureAdvancedBtn, &QPushButton::clicked, this, &MainWindow::onMeasureAdvanced);
     connect(m_backgroundOpacitySlider, &QSlider::valueChanged, this, [this](int value) {
         if (!m_canvas) {
             return;
