@@ -349,6 +349,18 @@ void MainWindow::setProjectActive(bool active) {
             ? m_projectName
             : QString::fromUtf8("Brak aktywnego projektu"));
     }
+    if (m_measureReportBtn) {
+        m_measureReportBtn->setEnabled(enabled);
+    }
+    if (m_measureLinearBtn) {
+        m_measureLinearBtn->setEnabled(enabled);
+    }
+    if (m_measurePolylineBtn) {
+        m_measurePolylineBtn->setEnabled(enabled);
+    }
+    if (m_measureAdvancedBtn) {
+        m_measureAdvancedBtn->setEnabled(enabled);
+    }
 }
 
 void MainWindow::buildProjectPanel() {
@@ -436,6 +448,26 @@ void MainWindow::buildProjectPanel() {
     controlsLayout->addWidget(m_backgroundPanel);
     m_backgroundPanel->setVisible(false);
 
+    auto measurementsTitle = new QLabel(QString::fromUtf8("Pomiary"), m_projectControls);
+    QFont measurementsFont = measurementsTitle->font();
+    measurementsFont.setBold(true);
+    measurementsTitle->setFont(measurementsFont);
+    controlsLayout->addWidget(measurementsTitle);
+
+    auto measurementsPanel = new QWidget(m_projectControls);
+    auto measurementsLayout = new QVBoxLayout(measurementsPanel);
+    measurementsLayout->setContentsMargins(20, 0, 0, 0);
+    measurementsLayout->setSpacing(6);
+    m_measureReportBtn = new QPushButton(QString::fromUtf8("Raport..."), measurementsPanel);
+    m_measureLinearBtn = new QPushButton(QString::fromUtf8("Pomiar liniowy"), measurementsPanel);
+    m_measurePolylineBtn = new QPushButton(QString::fromUtf8("Pomiar wieloliniowy (polilinia)"), measurementsPanel);
+    m_measureAdvancedBtn = new QPushButton(QString::fromUtf8("Pomiar zaawansowany..."), measurementsPanel);
+    measurementsLayout->addWidget(m_measureReportBtn);
+    measurementsLayout->addWidget(m_measureLinearBtn);
+    measurementsLayout->addWidget(m_measurePolylineBtn);
+    measurementsLayout->addWidget(m_measureAdvancedBtn);
+    controlsLayout->addWidget(measurementsPanel);
+
     layout->addWidget(m_projectControls);
     layout->addStretch(1);
 
@@ -468,6 +500,10 @@ void MainWindow::buildProjectPanel() {
         }
         m_canvas->setBackgroundOpacity(value / 100.0);
     });
+    connect(m_measureReportBtn, &QPushButton::clicked, this, &MainWindow::onReport);
+    connect(m_measureLinearBtn, &QPushButton::clicked, this, &MainWindow::onMeasureLinear);
+    connect(m_measurePolylineBtn, &QPushButton::clicked, this, &MainWindow::onMeasurePolyline);
+    connect(m_measureAdvancedBtn, &QPushButton::clicked, this, &MainWindow::onMeasureAdvanced);
 
     m_rightDock->setWidget(panel);
     updateBackgroundControls();
@@ -532,6 +568,9 @@ void MainWindow::refreshProjectPanel(int preferredBuildingIndex, int preferredFl
 QString MainWindow::createProjectTempFile(const QString& projectName,
                                          const QString& address,
                                          const QString& investor) {
+    m_projectName = projectName;
+    m_projectAddress = address;
+    m_projectInvestor = investor;
     QString safeName = projectName;
     safeName.replace(QRegularExpression(QStringLiteral("[^\\w\\d\\- ]")), "_");
     safeName = safeName.trimmed();
