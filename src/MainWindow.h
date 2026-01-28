@@ -88,6 +88,8 @@ private:
     QComboBox* m_floorCombo = nullptr;
     QWidget* m_backgroundPanel = nullptr;
     QToolButton* m_backgroundToggle = nullptr;
+    QToolButton* m_measurementsToggle = nullptr;
+    QWidget* m_measurementsPanel = nullptr;
     QPushButton* m_insertBackgroundBtn = nullptr;
     QPushButton* m_toggleBackgroundBtn = nullptr;
     QPushButton* m_scaleBackgroundBtn = nullptr;
@@ -95,6 +97,10 @@ private:
     QPushButton* m_clearBackgroundBtn = nullptr;
     QPushButton* m_adjustBackgroundBtn = nullptr;
     QSlider* m_backgroundOpacitySlider = nullptr;
+    QPushButton* m_reportBtn = nullptr;
+    QPushButton* m_measureLinearBtn = nullptr;
+    QPushButton* m_measurePolylineBtn = nullptr;
+    QPushButton* m_measureAdvancedBtn = nullptr;
     QPushButton* m_removeBuildingBtn = nullptr;
     QPushButton* m_renameBuildingBtn = nullptr;
     QPushButton* m_removeFloorBtn = nullptr;
