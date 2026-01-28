@@ -5,6 +5,7 @@
 class CanvasWidget;
 class QDockWidget;
 class QAction;
+class QMenuBar;
 class QLabel;
 class QComboBox;
 class QPushButton;
@@ -49,7 +50,7 @@ private:
 
     CanvasWidget* m_canvas = nullptr;
     ProjectSettings m_settings;
-    void createMenus();
+    void createMenus(QMenuBar* targetMenuBar);
     void setProjectActive(bool active);
     void buildProjectPanel();
     void refreshProjectPanel(int preferredBuildingIndex = -1, int preferredFloorIndex = -1);
@@ -74,6 +75,7 @@ private:
     // Panel dolny z ustawieniami aktualnego narzędzia
     class ToolSettingsWidget* m_settingsDock = nullptr;
     QStackedWidget* m_canvasStack = nullptr;
+    QMenuBar* m_projectMenuBar = nullptr;
 
     QAction* m_newProjectAction = nullptr;
     QAction* m_reportAction = nullptr;

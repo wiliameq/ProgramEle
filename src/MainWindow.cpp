@@ -54,16 +54,18 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent) {
     addDockWidget(Qt::BottomDockWidgetArea, m_settingsDock);
 
     buildProjectPanel();
-
-    createMenus();
+    createMenus(m_projectMenuBar);
     setProjectActive(false);
     statusBar()->showMessage("Gotowy");
 }
-void MainWindow::createMenus() {
-    auto fileMenu = menuBar()->addMenu("Plik");
+void MainWindow::createMenus(QMenuBar* targetMenuBar) {
+    if (!targetMenuBar) {
+        return;
+    }
+    auto fileMenu = targetMenuBar->addMenu("Plik");
     m_newProjectAction = fileMenu->addAction("Nowy projekt...");
     connect(m_newProjectAction, &QAction::triggered, this, &MainWindow::onNewProject);
-    auto measMenu = menuBar()->addMenu("Pomiary");
+    auto measMenu = targetMenuBar->addMenu("Pomiary");
     m_reportAction = measMenu->addAction("Raport...");
     connect(m_reportAction, &QAction::triggered, this, &MainWindow::onReport);
     m_measureLinearAction = measMenu->addAction("Pomiar liniowy");
@@ -72,7 +74,7 @@ void MainWindow::createMenus() {
     connect(m_measurePolylineAction, &QAction::triggered, this, &MainWindow::onMeasurePolyline);
     m_measureAdvancedAction = measMenu->addAction("Pomiar zaawansowany...");
     connect(m_measureAdvancedAction, &QAction::triggered, this, &MainWindow::onMeasureAdvanced);
-    auto viewMenu = menuBar()->addMenu("Widok");
+    auto viewMenu = targetMenuBar->addMenu("Widok");
     m_toggleMeasuresLayerAction = viewMenu->addAction("Warstwy → Pomiary");
     m_toggleMeasuresLayerAction->setCheckable(true);
     m_toggleMeasuresLayerAction->setChecked(true);
@@ -341,6 +343,11 @@ void MainWindow::buildProjectPanel() {
     auto layout = new QVBoxLayout(panel);
     layout->setContentsMargins(8, 8, 8, 8);
     layout->setSpacing(10);
+
+    m_projectMenuBar = new QMenuBar(panel);
+    m_projectMenuBar->setNativeMenuBar(false);
+    m_projectMenuBar->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
+    layout->addWidget(m_projectMenuBar);
 
     m_projectNameLabel = new QLabel(QString::fromUtf8("Brak aktywnego projektu"), panel);
     QFont nameFont = m_projectNameLabel->font();
