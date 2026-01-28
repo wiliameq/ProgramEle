@@ -7,15 +7,9 @@
 #include <QStatusBar>
 #include <QFileDialog>
 #include <QDockWidget>
-// Dodane nagłówki do widżetów używanych w panelu ustawień pomiarów.
-// Bez tych include'ów kompilator MSVC nie zna klas takich jak
-// QHBoxLayout, QLabel, QPushButton, QSpinBox czy QColorDialog,
-// co prowadziło do błędów kompilacji.
 #include <QHBoxLayout>
 #include <QLabel>
 #include <QPushButton>
-#include <QSpinBox>
-#include <QColorDialog>
 #include <QVBoxLayout>
 #include <QComboBox>
 #include <QToolButton>
@@ -126,22 +120,13 @@ void MainWindow::onToggleMeasuresLayer() { m_canvas->toggleMeasuresVisibility();
 void MainWindow::onReport() { m_canvas->openReportDialog(this); }
 void MainWindow::onMeasureLinear() {
     m_canvas->startMeasureLinear();
-    // Pokaż panel kontroli bez funkcji cofnij/przywróć (pojedynczy odcinek)
-    showMeasurementControls(false);
 }
 void MainWindow::onMeasurePolyline() {
     m_canvas->startMeasurePolyline();
-    // Pokaż panel z cofnięciem/przywróceniem dla polilinii
-    showMeasurementControls(true);
 }
 void MainWindow::onMeasureAdvanced() {
     // Po otwarciu dialogu pomiaru zaawansowanego CanvasWidget sam ustawia m_advTemplate.
     m_canvas->startMeasureAdvanced(this);
-    // Pokaż panel z cofnięciem/przywróceniem tylko jeżeli użytkownik nie anulował. Nie mamy
-    // bezpośredniego zwrotu z CanvasWidget::startMeasureAdvanced, więc zakładamy, że
-    // jeśli CanvasWidget zmieni tryb, panel powinien się pojawić. W najgorszym wypadku
-    // panel można zamknąć przyciskiem Anuluj.
-    showMeasurementControls(true);
 }
 
 void MainWindow::onNewProject() {
@@ -349,18 +334,6 @@ void MainWindow::setProjectActive(bool active) {
             ? m_projectName
             : QString::fromUtf8("Brak aktywnego projektu"));
     }
-    if (m_measureReportBtn) {
-        m_measureReportBtn->setEnabled(enabled);
-    }
-    if (m_measureLinearBtn) {
-        m_measureLinearBtn->setEnabled(enabled);
-    }
-    if (m_measurePolylineBtn) {
-        m_measurePolylineBtn->setEnabled(enabled);
-    }
-    if (m_measureAdvancedBtn) {
-        m_measureAdvancedBtn->setEnabled(enabled);
-    }
 }
 
 void MainWindow::buildProjectPanel() {
@@ -469,13 +442,6 @@ void MainWindow::buildProjectPanel() {
         m_backgroundPanel->setVisible(checked);
         m_backgroundToggle->setArrowType(checked ? Qt::DownArrow : Qt::RightArrow);
     });
-    connect(m_measurementsToggle, &QToolButton::toggled, this, [this](bool checked) {
-        if (!m_measurementsPanel) {
-            return;
-        }
-        m_measurementsPanel->setVisible(checked);
-        m_measurementsToggle->setArrowType(checked ? Qt::DownArrow : Qt::RightArrow);
-    });
     connect(m_insertBackgroundBtn, &QPushButton::clicked, this, &MainWindow::onOpenBackground);
     connect(m_toggleBackgroundBtn, &QPushButton::clicked, this, &MainWindow::onToggleBackground);
     connect(m_scaleBackgroundBtn, &QPushButton::clicked, this, &MainWindow::onSetScale);
@@ -488,11 +454,6 @@ void MainWindow::buildProjectPanel() {
         }
         m_canvas->setBackgroundOpacity(value / 100.0);
     });
-    connect(m_measureReportBtn, &QPushButton::clicked, this, &MainWindow::onReport);
-    connect(m_measureLinearBtn, &QPushButton::clicked, this, &MainWindow::onMeasureLinear);
-    connect(m_measurePolylineBtn, &QPushButton::clicked, this, &MainWindow::onMeasurePolyline);
-    connect(m_measureAdvancedBtn, &QPushButton::clicked, this, &MainWindow::onMeasureAdvanced);
-
     m_rightDock->setWidget(panel);
     updateBackgroundControls();
 }
@@ -649,18 +610,6 @@ void MainWindow::applyCanvasForSelection() {
     }
     m_canvas = floor->canvas;
     updateBackgroundControls();
-    if (m_measurementsPanel && m_measurementsPanel->isVisible() && m_canvas) {
-        if (m_measurementsLineWidthSpin) {
-            m_measurementsLineWidthSpin->blockSignals(true);
-            m_measurementsLineWidthSpin->setValue(m_canvas->currentLineWidth());
-            m_measurementsLineWidthSpin->blockSignals(false);
-        }
-        if (m_measurementsColorBtn) {
-            QString hex = m_canvas->currentColor().name();
-            m_measurementsColorBtn->setStyleSheet(QString("background-color: %1").arg(hex));
-            m_measurementsColorBtn->setText(hex);
-        }
-    }
 }
 
 void MainWindow::updateBackgroundControls() {
@@ -690,25 +639,12 @@ void MainWindow::updateBackgroundControls() {
     }
 }
 
-void MainWindow::setMeasurementsPanelVisible(bool visible) {
-    if (m_measurementsToggle) {
-        m_measurementsToggle->setChecked(visible);
-        m_measurementsToggle->setArrowType(visible ? Qt::DownArrow : Qt::RightArrow);
-    }
-    if (m_measurementsPanel) {
-        m_measurementsPanel->setVisible(visible);
-    }
-}
-
 void MainWindow::ensureFloorCanvas(FloorData& floor) {
     if (floor.canvas || !m_canvasStack) {
         return;
     }
     floor.canvas = new CanvasWidget(m_canvasStack, &m_settings);
     m_canvasStack->addWidget(floor.canvas);
-    connect(floor.canvas, &CanvasWidget::measurementFinished, this, [this]() {
-        setMeasurementsPanelVisible(false);
-    });
 }
 
 void MainWindow::removeFloorCanvas(FloorData& floor) {
@@ -978,37 +914,4 @@ void MainWindow::showBackgroundAdjustControls() {
 
     syncButtons();
     m_settingsDock->setSettingsWidget(panel);
-}
-
-// --- Pomocnicza metoda ---
-// Ustawia prawy panel na tryb rysowania pomiarów. Pozwala wybrać kolor i grubość linii,
-// oraz potwierdzić/anulować/cofnąć/przywrócić rysowanie. Parametr withUndoRedo kontroluje
-// obecność przycisków cofania/przywracania (dla polilinii i pomiaru zaawansowanego).
-void MainWindow::showMeasurementControls(bool withUndoRedo) {
-    if (!m_measurementsPanel || !m_canvas) {
-        return;
-    }
-
-    if (m_measurementsUndoBtn) {
-        m_measurementsUndoBtn->setVisible(withUndoRedo);
-    }
-    if (m_measurementsRedoBtn) {
-        m_measurementsRedoBtn->setVisible(withUndoRedo);
-    }
-    if (m_measurementsConfirmBtn) {
-        m_measurementsConfirmBtn->setVisible(withUndoRedo);
-    }
-
-    if (m_measurementsLineWidthSpin) {
-        m_measurementsLineWidthSpin->blockSignals(true);
-        m_measurementsLineWidthSpin->setValue(m_canvas->currentLineWidth());
-        m_measurementsLineWidthSpin->blockSignals(false);
-    }
-    if (m_measurementsColorBtn) {
-        QString hex = m_canvas->currentColor().name();
-        m_measurementsColorBtn->setStyleSheet(QString("background-color: %1").arg(hex));
-        m_measurementsColorBtn->setText(hex);
-    }
-
-    setMeasurementsPanelVisible(true);
 }
