@@ -349,18 +349,6 @@ void MainWindow::setProjectActive(bool active) {
             ? m_projectName
             : QString::fromUtf8("Brak aktywnego projektu"));
     }
-    if (m_measureReportBtn) {
-        m_measureReportBtn->setEnabled(enabled);
-    }
-    if (m_measureLinearBtn) {
-        m_measureLinearBtn->setEnabled(enabled);
-    }
-    if (m_measurePolylineBtn) {
-        m_measurePolylineBtn->setEnabled(enabled);
-    }
-    if (m_measureAdvancedBtn) {
-        m_measureAdvancedBtn->setEnabled(enabled);
-    }
 }
 
 void MainWindow::buildProjectPanel() {
@@ -448,6 +436,52 @@ void MainWindow::buildProjectPanel() {
     controlsLayout->addWidget(m_backgroundPanel);
     m_backgroundPanel->setVisible(false);
 
+    m_measurementsToggle = new QToolButton(m_projectControls);
+    m_measurementsToggle->setText(QString::fromUtf8("Pomiary"));
+    m_measurementsToggle->setToolButtonStyle(Qt::ToolButtonTextBesideIcon);
+    m_measurementsToggle->setArrowType(Qt::RightArrow);
+    m_measurementsToggle->setCheckable(true);
+    m_measurementsToggle->setChecked(false);
+    m_measurementsToggle->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Preferred);
+    controlsLayout->addWidget(m_measurementsToggle);
+
+    m_measurementsPanel = new QWidget(m_projectControls);
+    auto measurementsLayout = new QVBoxLayout(m_measurementsPanel);
+    measurementsLayout->setContentsMargins(20, 0, 0, 0);
+    measurementsLayout->setSpacing(6);
+
+    auto colorRow = new QHBoxLayout();
+    auto colorLabel = new QLabel(QString::fromUtf8("Kolor:"), m_measurementsPanel);
+    m_measurementsColorBtn = new QPushButton(m_measurementsPanel);
+    m_measurementsColorBtn->setMinimumWidth(90);
+    colorRow->addWidget(colorLabel);
+    colorRow->addWidget(m_measurementsColorBtn);
+    colorRow->addStretch();
+    measurementsLayout->addLayout(colorRow);
+
+    auto widthRow = new QHBoxLayout();
+    auto widthLabel = new QLabel(QString::fromUtf8("Grubość:"), m_measurementsPanel);
+    m_measurementsLineWidthSpin = new QSpinBox(m_measurementsPanel);
+    m_measurementsLineWidthSpin->setRange(1, 8);
+    widthRow->addWidget(widthLabel);
+    widthRow->addWidget(m_measurementsLineWidthSpin);
+    widthRow->addStretch();
+    measurementsLayout->addLayout(widthRow);
+
+    auto actionsRow = new QHBoxLayout();
+    m_measurementsUndoBtn = new QPushButton(QString::fromUtf8("Cofnij"), m_measurementsPanel);
+    m_measurementsRedoBtn = new QPushButton(QString::fromUtf8("Przywróć"), m_measurementsPanel);
+    m_measurementsConfirmBtn = new QPushButton(QString::fromUtf8("Potwierdź"), m_measurementsPanel);
+    m_measurementsCancelBtn = new QPushButton(QString::fromUtf8("Anuluj"), m_measurementsPanel);
+    actionsRow->addWidget(m_measurementsUndoBtn);
+    actionsRow->addWidget(m_measurementsRedoBtn);
+    actionsRow->addWidget(m_measurementsConfirmBtn);
+    actionsRow->addWidget(m_measurementsCancelBtn);
+    actionsRow->addStretch();
+    measurementsLayout->addLayout(actionsRow);
+
+    controlsLayout->addWidget(m_measurementsPanel);
+    m_measurementsPanel->setVisible(false);
 
     layout->addWidget(m_projectControls);
     layout->addStretch(1);
@@ -488,11 +522,6 @@ void MainWindow::buildProjectPanel() {
         }
         m_canvas->setBackgroundOpacity(value / 100.0);
     });
-    connect(m_measureReportBtn, &QPushButton::clicked, this, &MainWindow::onReport);
-    connect(m_measureLinearBtn, &QPushButton::clicked, this, &MainWindow::onMeasureLinear);
-    connect(m_measurePolylineBtn, &QPushButton::clicked, this, &MainWindow::onMeasurePolyline);
-    connect(m_measureAdvancedBtn, &QPushButton::clicked, this, &MainWindow::onMeasureAdvanced);
-
     m_rightDock->setWidget(panel);
     updateBackgroundControls();
 }
@@ -556,9 +585,6 @@ void MainWindow::refreshProjectPanel(int preferredBuildingIndex, int preferredFl
 QString MainWindow::createProjectTempFile(const QString& projectName,
                                          const QString& address,
                                          const QString& investor) {
-    m_projectName = projectName;
-    m_projectAddress = address;
-    m_projectInvestor = investor;
     QString safeName = projectName;
     safeName.replace(QRegularExpression(QStringLiteral("[^\\w\\d\\- ]")), "_");
     safeName = safeName.trimmed();
