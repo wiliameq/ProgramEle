@@ -64,9 +64,9 @@ bool ExportManager::exportToPDF(const QString& path, const QList<Measure>& measu
     painter.drawRect(margin, y, pdf.width() - 2 * margin, rowHeight);
     painter.drawText(margin + 10, y + 20, "ID");
     painter.drawText(margin + colWidth + 10, y + 20, "Nazwa");
-    painter.drawText(margin + 2 * colWidth + 10, y + 20, "Długość [m]");
-    painter.drawText(margin + 3 * colWidth + 10, y + 20, "Bufor [m]");
-    painter.drawText(margin + 4 * colWidth + 10, y + 20, "Razem [m]");
+    painter.drawText(margin + 2 * colWidth + 10, y + 20, "Długość [cm]");
+    painter.drawText(margin + 3 * colWidth + 10, y + 20, "Bufor [cm]");
+    painter.drawText(margin + 4 * colWidth + 10, y + 20, "Razem [cm]");
     y += rowHeight;
 
     painter.setFont(QFont("Arial", 9));
