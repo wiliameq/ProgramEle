@@ -20,6 +20,21 @@ double safePixelsPerMeter(double pixelsPerMeter, double zoom) {
     }
     return value;
 }
+
+void drawMeasureDots(QPainter& p, const QColor& color, int lineWidthPx, const std::vector<QPointF>& pts) {
+    if (pts.empty()) {
+        return;
+    }
+    const double radius = std::max(3.0, 1.5 * static_cast<double>(lineWidthPx));
+    QPen pen(color);
+    pen.setWidthF(1.0);
+    pen.setCosmetic(true);
+    p.setPen(pen);
+    p.setBrush(color);
+    for (const auto& pt : pts) {
+        p.drawEllipse(pt, radius, radius);
+    }
+}
 } // namespace
 
 MeasurementsTool::MeasurementsTool(ToolHost* host, std::function<void()> onFinished)
@@ -58,6 +73,7 @@ void MeasurementsTool::draw(QPainter& p) {
         for (size_t i = 1; i < m.pts.size(); ++i) {
             p.drawLine(m.pts[i - 1], m.pts[i]);
         }
+        drawMeasureDots(p, m.color, m.lineWidthPx, m.pts);
         QPointF labelPos = m.pts.back();
         QString text = fmtLenInProjectUnit(m.totalWithBufferMeters);
         QFontMetrics fm(p.font());
@@ -95,12 +111,15 @@ void MeasurementsTool::drawOverlay(QPainter& p, bool hasMouseWorld, const QPoint
     for (size_t i = 1; i < m_currentPts.size(); ++i) {
         p.drawLine(m_currentPts[i - 1], m_currentPts[i]);
     }
+    drawMeasureDots(p, m_currentColor, m_currentLineWidth, m_currentPts);
     double L = polyLengthCm(m_currentPts);
     if (hasMouseWorld) {
         p.drawLine(m_currentPts.back(), mouseWorld);
         double dx = mouseWorld.x() - m_currentPts.back().x();
         double dy = mouseWorld.y() - m_currentPts.back().y();
         L += std::hypot(dx, dy) / safePixelsPerMeter(m_host->pixelsPerMeter(), 1.0);
+        std::vector<QPointF> previewPts = {mouseWorld};
+        drawMeasureDots(p, m_currentColor, m_currentLineWidth, previewPts);
     }
     QPointF at = hasMouseWorld ? mouseWorld : m_currentPts.back();
     QString text = fmtLenInProjectUnit(L);
